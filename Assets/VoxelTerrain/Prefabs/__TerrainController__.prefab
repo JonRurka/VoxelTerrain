@@ -1,0 +1,83 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &100794
+GameObject:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  serializedVersion: 4
+  m_Component:
+  - 4: {fileID: 496338}
+  - 114: {fileID: 11415970}
+  m_Layer: 0
+  m_Name: __TerrainController__
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &496338
+Transform:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 100794}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+--- !u!114 &11415970
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 100794}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f72453ea36eaad4428b0dc87913eb86c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  grassPrefab: {fileID: 195304, guid: 7b93670af5373f54980fc25327147e2d, type: 2}
+  pathPointPrefab: {fileID: 153416, guid: 3a15b40d62553a340a70fcd1fc24e72b, type: 2}
+  textureAtlas: {fileID: 0}
+  AtlasUvs: []
+  chunkMaterial: {fileID: 2100000, guid: 5db58f75f57571c419b8c3851697ac7d, type: 2}
+  seed: 0
+  threads: 2
+  newPlayerChunkPos:
+    x: 0
+    y: 0
+    z: 0
+  newPlayerVoxelPos:
+    x: 0
+    y: 0
+    z: 0
+  LODtarget: {x: 0, y: 0, z: 0}
+  chunksInQueue: 0
+  chunksGenerated: 0
+  VoxelSize: 0
+  MeshSize: 0
+  maxGrassDistance: 30
+  chunkNoExistError: 0
+  cannotFindBlock: 0
+  player: {fileID: 0}
+  chunkPrefab: {fileID: 181032, guid: 2f46cbe0462c7184d9414fb46bc6cd04, type: 2}
+  AllCubeTextures:
+  - {fileID: 2800000, guid: c6e0767b1f8c34890ac245217f4b9731, type: 3}
+  - {fileID: 2800000, guid: 18214e9d6af6248559d501391856f1c7, type: 3}
+  - {fileID: 2800000, guid: a611a1d272883a04c945080bb908e41b, type: 3}
+  - {fileID: 2800000, guid: 7f90270ccb979954baad7b1031ebc7c1, type: 3}
+  BlocksArray: []
+--- !u!1001 &100100000
+Prefab:
+  m_ObjectHideFlags: 1
+  serializedVersion: 2
+  m_Modification:
+    m_TransformParent: {fileID: 0}
+    m_Modifications: []
+    m_RemovedComponents: []
+  m_ParentPrefab: {fileID: 0}
+  m_RootGameObject: {fileID: 100794}
+  m_IsPrefabParent: 1
