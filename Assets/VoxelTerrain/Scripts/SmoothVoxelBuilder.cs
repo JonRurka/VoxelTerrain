@@ -440,17 +440,17 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
             {
                 watch.Reset();
                 watch.Start();
-                for (superLocX = xStart, x = 0; x < ChunkSizeX; superLocX += skipDist, x++)
+                for (superLocX = xStart, x = 0; x < ChunkSizeX; superLocX++, x++)
                 {
-                    for (superLocZ = zStart, z = 0; z < ChunkSizeZ; superLocZ += skipDist, z++)
+                    for (superLocZ = zStart, z = 0; z < ChunkSizeZ; superLocZ++, z++)
                     {
-                        for (superLocY = yStart, y = 0; y < ChunkSizeY; superLocY += skipDist, y++)
+                        for (superLocY = yStart, y = 0; y < ChunkSizeY; superLocY++, y++)
                         {
                             if (!deactivated)
                             {
                                 
                                 Vector3 worldPos = new Vector3(x * sideLength, y * sideLength, z * sideLength);
-                                Vector3Int globalPos = new Vector3Int(superLocX, superLocY, superLocZ);
+                                Vector3Int globalPos = new Vector3Int(superLocX * skipDist, superLocY *skipDist, superLocZ * skipDist);
                                 Vector3Int localPos = new Vector3Int(x, y, z);
                                 Vector4[] grid = new Vector4[8];
                                 //miscWatch.Start();
@@ -468,6 +468,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
                 watch.Stop();
                 renderTime = watch.Elapsed.ToString();
                 miscTime = miscWatch.Elapsed.ToString();
+                miscTime = superLocZ.ToString();
             }
             catch (Exception e)
             {
@@ -613,7 +614,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
             }
             else
             {
-                //return new Vector4(world.x, world.y, world.z, 5);
+                result = new Vector4(world.x, world.y, world.z, 100);
                 result = new Vector4(world.x, world.y, world.z, GetIsoValue(local, global));
             }
         }
@@ -677,12 +678,12 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         try
         {
             
-            float surfaceHeight = GetSurfaceHeight(LocalPosition.x, LocalPosition.z) + VoxelSettings.groundOffset;
+            float surfaceHeight = GetSurfaceHeight(LocalPosition.x, LocalPosition.z);
             result = surfaceHeight - globalLocation.y;
             bool surface = (result > 0);
 
             if (enableCaves) {
-                float noiseVal = (float)Noise(caveModule, globalLocation.x, globalLocation.y, globalLocation.z, 16.0 * VoxelsPerMeter,
+                float noiseVal = (float)Noise(caveModule, globalLocation.x, globalLocation.y, globalLocation.z, 16.0,
                     17.0, 1.0);
                 if (noiseVal > caveDensity) {
                     result = result - noiseVal;
@@ -690,7 +691,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
                 }
             }
 
-            /*if (globalLocation.y == 1)
+            /*if (LocalPosition.y == 1)
                 result = 1;
             else
                 result = 0;*/

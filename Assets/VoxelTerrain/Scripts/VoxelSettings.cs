@@ -7,7 +7,7 @@ public static class VoxelSettings {
     public static int radius = 10;
     public static bool randomSeed = false;
     public static bool CircleGen = false;
-    public static bool enableCaves = false;
+    public static bool enableCaves = true;
     public static float caveDensity = 5;
     public static float amplitude = 250;
     public static float groundOffset = 10;
@@ -21,7 +21,7 @@ public static class VoxelSettings {
     public static int ViewRadius = 2;
 
     // chunk settings.
-    public static float voxelsPerMeter = 1f;
+    public static float voxelsPerMeter = 1/3f;
     public static int MeterSizeX = 20;
     public static int MeterSizeY = 20;
     public static int MeterSizeZ = 20;
