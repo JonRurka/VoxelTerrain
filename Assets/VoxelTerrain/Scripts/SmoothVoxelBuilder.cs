@@ -26,7 +26,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         }
     }
     public Block[] blocks;
-    public float[] SurfaceData;
+    public double[] SurfaceData;
     public IPageController controller;
     public BlockType[] BlockTypes;
     public Rect[] AtlasUvs;
@@ -330,7 +330,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
         };
     #endregion
-    static Vector3Int[] directionOffsets = new Vector3Int[8]
+    public static Vector3Int[] directionOffsets = new Vector3Int[8]
     {
         new Vector3Int(0, 0, 1),
         new Vector3Int(1, 0, 1),
@@ -346,7 +346,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
     public Vector3[] locOffset;
     public Vector3Int[] globalOffsets;
 
-    public float VoxelsPerMeter;
+    public double VoxelsPerMeter;
     public int ChunkMeterSizeX;
     public int ChunkMeterSizeY;
     public int ChunkMeterSizeZ;
@@ -355,7 +355,9 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
     public int ChunkSizeZ;
     public int skipDist;
     public float half;
-    public float sideLength;
+    public float xSideLength;
+    public float ySideLength;
+    public float zSideLength;
 
     public int blocksFilled = 0;
     public int generatedInside = 0;
@@ -369,7 +371,6 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
     public bool enableCaves;
     public float amp;
     public float caveDensity;
-    public float groundOffset;
     public float grassOffset;
 
     public IModule NoiseModule;
@@ -394,7 +395,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         location = _Location;
     }
 
-    public void CalculateVariables(float voxelsPerMeter, int chunkMeterSizeX, int chunkMeterSizeY, int chunkMeterSizeZ) {
+    public void CalculateVariables(double voxelsPerMeter, int chunkMeterSizeX, int chunkMeterSizeY, int chunkMeterSizeZ) {
         VoxelsPerMeter = voxelsPerMeter;
         ChunkMeterSizeX = chunkMeterSizeX;
         ChunkMeterSizeY = chunkMeterSizeY;
@@ -449,7 +450,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
                             if (!deactivated)
                             {
                                 
-                                Vector3 worldPos = new Vector3(x * sideLength, y * sideLength, z * sideLength);
+                                Vector3 worldPos = new Vector3(x * xSideLength, y * ySideLength, z * zSideLength);
                                 Vector3Int globalPos = new Vector3Int(superLocX * skipDist, superLocY *skipDist, superLocZ * skipDist);
                                 Vector3Int localPos = new Vector3Int(x, y, z);
                                 Vector4[] grid = new Vector4[8];
@@ -472,9 +473,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
             }
             catch (Exception e)
             {
-                SafeDebug.LogError("Message: " + e.Message + ", \nFunction: Render,\nLocation: " + location +
-                                    string.Format("\nlocal: {6}/{7}, {8}/{9}, {10}/{11}",
-                                    x, ChunkSizeX, y, ChunkSizeY, z, ChunkSizeZ), e);
+                SafeDebug.LogError(e.GetType().ToString() + ": " + e.Message + "\n " + e.StackTrace);
             }
         }
         return new MeshData(vertices.ToArray(), triangles.ToArray(), UVs.ToArray());
@@ -535,7 +534,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         }
     }
 
-    public float[] Generate(IModule module, int _seed, bool _enableCaves, float _amp, float _caveDensity, float _groundOffset, float _grassOffset)
+    public void Generate(IModule module, int _seed, bool _enableCaves, float _amp, float _caveDensity, float _grassOffset)
     {
         
         try
@@ -546,7 +545,6 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
             enableCaves = _enableCaves;
             amp = _amp;
             caveDensity = _caveDensity;
-            groundOffset = _groundOffset;
             grassOffset = _grassOffset;
 
             Perlin _caves = new Perlin();
@@ -565,11 +563,9 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         {
             SafeDebug.LogError(string.Format("{0}\nFunction: Generate\n Chunk: {1}", e.Message, location.ToString()), e);
         }
-
-        return SurfaceData;
     }
 
-    public float[] Generate(int _seed, bool _enableCaves, float _amp, float _caveDensity, float _groundOffset, float _grassOffset)
+    public void Generate(int _seed, bool _enableCaves, float _amp, float _caveDensity, float _grassOffset)
     {
         try
         {
@@ -577,7 +573,6 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
             enableCaves = _enableCaves;
             amp = _amp;
             caveDensity = _caveDensity;
-            groundOffset = _groundOffset;
             grassOffset = _grassOffset;
 
             Vector2Int bottomLeft = new Vector2(location.x * ChunkSizeX, location.z * ChunkSizeZ);
@@ -595,8 +590,6 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         {
             SafeDebug.LogError(e.Message + "\nFunction: Generate, Chunk: " + location.ToString(), e);
         }
-
-        return SurfaceData;
     }
 
     public Vector4 GetVector4(Vector3 world, Vector3Int local, Vector3Int global, bool generate)
@@ -609,13 +602,13 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         {
             if (IsInBounds(local.x, local.y, local.z))
             {
-                float iso = GetIsoValue(local, global, generate);
-                result = new Vector4(world.x, world.y, world.z, iso);
+                double iso = GetIsoValue(local, global, generate);
+                result = new Vector4(world.x, world.y, world.z, (float)iso);
             }
             else
             {
                 result = new Vector4(world.x, world.y, world.z, 100);
-                result = new Vector4(world.x, world.y, world.z, GetIsoValue(local, global));
+                result = new Vector4(world.x, world.y, world.z, (float)GetIsoValue(local, global));
             }
         }
         else
@@ -626,7 +619,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
                 IVoxelBuilder builder = controller.GetBuilder(chunk.x, chunk.y, chunk.z);
                 if (builder != null)
                 {
-                    result = new Vector4(world.x, world.y, world.z, builder.GetBlock(chunklocalVoxel.x, chunklocalVoxel.y, chunklocalVoxel.z).iso);
+                    result = new Vector4(world.x, world.y, world.z, (float)builder.GetBlock(chunklocalVoxel.x, chunklocalVoxel.y, chunklocalVoxel.z).iso);
                 }
                 else
                 {
@@ -635,25 +628,25 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
             }
             else
             {
-                result = new Vector4(world.x, world.y, world.z, GetIsoValue(local, global, generate));
+                result = new Vector4(world.x, world.y, world.z, (float)GetIsoValue(local, global, generate));
             }
         }
         return result;
     }
 
-    public float GetIsoValue(int LocalPositionX, int LocalPositionY, int LocalPositionZ, int globalX, int globalY, int globalZ, bool generate) 
+    public double GetIsoValue(int LocalPositionX, int LocalPositionY, int LocalPositionZ, int globalX, int globalY, int globalZ, bool generate) 
     {
         return GetIsoValue(new Vector3Int(LocalPositionX, LocalPositionY, LocalPositionZ), new Vector3Int(globalX, globalY, globalZ), generate);
     }
 
-    public float GetIsoValue(Vector3Int LocalPosition, Vector3Int globalLocation, bool generate)
+    public double GetIsoValue(Vector3Int LocalPosition, Vector3Int globalLocation, bool generate)
     {
         try
         {
             if (generate && !IsBlockSet(LocalPosition.x, LocalPosition.y, LocalPosition.z))
             {
                 generatedInside++;
-                float generatedValue = GetIsoValue(LocalPosition.x, LocalPosition.y, LocalPosition.z, globalLocation.x, globalLocation.y, globalLocation.z);
+                float generatedValue = (float)GetIsoValue(LocalPosition.x, LocalPosition.y, LocalPosition.z, globalLocation.x, globalLocation.y, globalLocation.z);
                 byte type = generatedValue > 0 ? (byte)1 : (byte)0;
                 SetBlock(LocalPosition.x, LocalPosition.y, LocalPosition.z, new Block(type, generatedValue));
                 MarkAsSet(LocalPosition.x, LocalPosition.y, LocalPosition.z);
@@ -667,19 +660,19 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         }
     }
 
-    public float GetIsoValue(int LocalPositionX, int LocalPositionY, int LocalPositionZ, int globalX, int globalY, int globalZ)
+    public double GetIsoValue(int LocalPositionX, int LocalPositionY, int LocalPositionZ, int globalX, int globalY, int globalZ)
     {
         return GetIsoValue(new Vector3Int(LocalPositionX, LocalPositionY, LocalPositionZ), new Vector3Int(globalX, globalY, globalZ));
     }
 
-    public float GetIsoValue(Vector3Int LocalPosition, Vector3Int globalLocation)
+    public double GetIsoValue(Vector3Int LocalPosition, Vector3Int globalLocation)
     {
-        float result = -1;
+        double result = -1;
         try
         {
             
-            float surfaceHeight = GetSurfaceHeight(LocalPosition.x, LocalPosition.z);
-            result = surfaceHeight - globalLocation.y;
+            double surfaceHeight = GetSurfaceHeight(LocalPosition.x, LocalPosition.z);
+            result = surfaceHeight - (globalLocation.y * VoxelsPerMeter);
             bool surface = (result > 0);
 
             if (enableCaves) {
@@ -691,10 +684,10 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
                 }
             }
 
-            /*if (LocalPosition.y == 1)
+            if (globalLocation.y == 100)
                 result = 1;
             else
-                result = 0;*/
+                result = 0;
 
 
             //if (surface && !surfacePoints.ContainsKey(new Vector2Int(globalLocation.x, globalLocation.z)))
@@ -771,7 +764,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         }
     }
 
-    public float GetBlockValue(int x, int y, int z)
+    public double GetBlockValue(int x, int y, int z)
     {
         if (!deactivated)
         {
@@ -802,7 +795,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         return false;
     }
 
-    public float GetSurfaceHeight(int LocalX, int LocalZ)
+    public double GetSurfaceHeight(int LocalX, int LocalZ)
     {
         return SurfaceData[(LocalX + 1) * (ChunkSizeZ + 2) + (LocalZ + 1)];
     }
@@ -872,7 +865,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
             {
                 for (int noiseZ = bottomLeft.y - 1, z = 0; noiseZ < topRight.y + 1; noiseZ++, z++)
                 {
-                    SurfaceData[x * (ChunkSizeZ + 2) + z] = GetHeight(noiseX, noiseZ);
+                    SurfaceData[x * (ChunkSizeZ + 2) + z] = (float)GetHeight(noiseX, noiseZ);
                 }
             }
         }
@@ -882,10 +875,10 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         }
     }
 
-    private float GetHeight(int x, int y)
+    private double GetHeight(int x, int y)
     {
         if (NoiseModule != null)
-            return ((float)NoiseModule.GetValue((x * (.005 / VoxelsPerMeter)), 0, (y * (.005 / VoxelsPerMeter))) * amp * VoxelsPerMeter) + groundOffset * VoxelsPerMeter;
+            return NoiseModule.GetValue((x * (.003 / VoxelsPerMeter)), 0, (y * (.003 / VoxelsPerMeter))) * VoxelsPerMeter;
         return 0;
     }
 
@@ -894,19 +887,21 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         ChunkSizeX = (int)(ChunkMeterSizeX * VoxelsPerMeter);
         ChunkSizeY = (int)(ChunkMeterSizeY * VoxelsPerMeter);
         ChunkSizeZ = (int)(ChunkMeterSizeZ * VoxelsPerMeter);
-        half = ((1.0f / VoxelsPerMeter) / 2.0f);
-        sideLength = 1.0f / VoxelsPerMeter;
-        skipDist = Mathf.RoundToInt(1 / VoxelsPerMeter);
+        half = ((1.0f / (float)VoxelsPerMeter) / 2.0f);
+        xSideLength = ChunkMeterSizeX / (float)ChunkSizeX;
+        ySideLength = ChunkMeterSizeY / (float)ChunkSizeY;
+        zSideLength = ChunkMeterSizeZ / (float)ChunkSizeZ;
+        skipDist = Mathf.RoundToInt(1 / (float)VoxelsPerMeter);
         locOffset = new Vector3[8]
         {
-            new Vector3(0,0,sideLength),
-            new Vector3(sideLength,0,sideLength),
-            new Vector3(sideLength,0,0),
+            new Vector3(0,0,zSideLength),
+            new Vector3(xSideLength,0,zSideLength),
+            new Vector3(xSideLength,0,0),
             new Vector3(0,0,0),
-            new Vector3(0,sideLength,sideLength),
-            new Vector3(sideLength,sideLength,sideLength),
-            new Vector3(sideLength,sideLength,0),
-            new Vector3(0,sideLength,0),
+            new Vector3(0,ySideLength,zSideLength),
+            new Vector3(xSideLength,ySideLength,zSideLength),
+            new Vector3(xSideLength,ySideLength,0),
+            new Vector3(0,ySideLength,0),
         };
         globalOffsets = new Vector3Int[8]
         {
@@ -966,15 +961,6 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
     private void AllocateBlockArray(int sizeX, int sizeY, int sizeZ)
     {
         blocks = new Block[sizeX * sizeY * sizeZ];
-        SurfaceData = new float[(sizeX + 2) * (sizeZ + 2)];
-        /*blocks = new Block[sizeX][][];
-        for (int i = 0; i < sizeX; ++i)
-        {
-            blocks[i] = new Block[sizeY][];
-            for (int j = 0; j < sizeY; ++j)
-            {
-                blocks[i][j] = new Block[sizeZ];
-            }
-        }*/
+        SurfaceData = new double[(sizeX + 2) * (sizeZ + 2)];
     }
 }

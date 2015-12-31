@@ -11,11 +11,12 @@ public static class VoxelConversions {
     }
 
     public static Vector3 ChunkCoordToWorld(Vector3Int location) {
-        return new Vector3(location.x * VoxelSettings.ChunkSizeX / VoxelSettings.voxelsPerMeter - VoxelSettings.half, location.y * VoxelSettings.ChunkSizeY / VoxelSettings.voxelsPerMeter - VoxelSettings.half, location.z * VoxelSettings.ChunkSizeZ / VoxelSettings.voxelsPerMeter - VoxelSettings.half);
+        //return new Vector3(location.x * VoxelSettings.ChunkSizeX / VoxelSettings.voxelsPerMeter - VoxelSettings.half, location.y * VoxelSettings.ChunkSizeY / VoxelSettings.voxelsPerMeter - VoxelSettings.half, location.z * VoxelSettings.ChunkSizeZ / VoxelSettings.voxelsPerMeter - VoxelSettings.half);
+        return new Vector3(location.x * VoxelSettings.MeterSizeX - VoxelSettings.half, location.y * VoxelSettings.MeterSizeY - VoxelSettings.half, location.z * VoxelSettings.MeterSizeZ - VoxelSettings.half);
     }
 
     public static Vector3Int WorldPosToChunkCoord(Vector3 location) {
-        return new Vector3Int(Mathf.RoundToInt(location.x / VoxelSettings.ChunkSizeX * VoxelSettings.voxelsPerMeter + VoxelSettings.half), Mathf.RoundToInt(location.y / VoxelSettings.ChunkSizeY * VoxelSettings.voxelsPerMeter + VoxelSettings.half), Mathf.RoundToInt(location.y / VoxelSettings.ChunkSizeY * VoxelSettings.voxelsPerMeter + VoxelSettings.half));
+        return new Vector3Int(Mathf.RoundToInt(location.x / VoxelSettings.MeterSizeX + VoxelSettings.half), Mathf.RoundToInt(location.y / VoxelSettings.MeterSizeY + VoxelSettings.half), Mathf.RoundToInt(location.y / VoxelSettings.MeterSizeZ + VoxelSettings.half));
     }
 
     public static Vector3Int GlobalToLocalChunkCoords(Vector3Int location) {
@@ -100,9 +101,9 @@ public static class VoxelConversions {
 
     public static Vector3Int WorldToVoxel(Vector3 worldPos)
     {
-        int x = Mathf.FloorToInt(((worldPos.x) + VoxelSettings.half) * VoxelSettings.voxelsPerMeter);
-        int y = Mathf.FloorToInt(((worldPos.y) + VoxelSettings.half) * VoxelSettings.voxelsPerMeter);
-        int z = Mathf.FloorToInt(((worldPos.z) + VoxelSettings.half) * VoxelSettings.voxelsPerMeter);
+        int x = Mathf.FloorToInt(((worldPos.x) + VoxelSettings.half) * (float)VoxelSettings.voxelsPerMeter);
+        int y = Mathf.FloorToInt(((worldPos.y) + VoxelSettings.half) * (float)VoxelSettings.voxelsPerMeter);
+        int z = Mathf.FloorToInt(((worldPos.z) + VoxelSettings.half) * (float)VoxelSettings.voxelsPerMeter);
         return new Vector3Int(x, y, z);
     }
 }

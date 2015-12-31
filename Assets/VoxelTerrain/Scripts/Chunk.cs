@@ -33,8 +33,10 @@ public class Chunk : MonoBehaviour {
     public int size = 0;
     public int vertSize = 0;
     public int triSize = 0;
+    public int LODlevel = 0;
     public List<Vector3Int> surface;
     public List<Vector2Int> surface2D;
+    public bool canUpdateForLOD = false;
 
 
     public bool Generated {
@@ -47,7 +49,6 @@ public class Chunk : MonoBehaviour {
     GameObject _player;
     IModule surfaceModule;
     public int voxelsPerMeter = 1;
-    int oldVoxelsPerMeter = -1;
     object _lockObj;
     
 
@@ -59,15 +60,9 @@ public class Chunk : MonoBehaviour {
     bool _grassEnabled = false;
     bool _destroyed = false;
     bool _treesPlaced = false;
+    int oldLODlevel = -1;
 
     List<GameObject> _grassList = new List<GameObject>();
-
-	// Use this for initialization
-	void Start () {
-        editQueue = new List<BlockChange>();
-        _lockObj = new object();
-        surface = new List<Vector3Int>();
-	}
 	
 	// Update is called once per frame
 	public void ChunkUpdate () {
@@ -97,8 +92,11 @@ public class Chunk : MonoBehaviour {
             if (distance > (VoxelSettings.radius * VoxelSettings.MeterSizeX)) {
                 _destroyed = true;
                 TerrainController.Instance.DestroyChunk(chunkPosition);
+                Debug.Log("Destoying chunk");
                 return;
             }
+
+            UpdateLOD();
 
             if (editQueue.Count > 0)
             {
@@ -160,6 +158,45 @@ public class Chunk : MonoBehaviour {
         }
 	}
 
+    public void UpdateLOD() {
+        Loom.QueueAsyncTask("LODupdate", () => {
+            if (canUpdateForLOD) {
+                Vector3 worldPos = VoxelConversions.ChunkCoordToWorld(chunkPosition);
+                float distance = Vector3.Distance(worldPos, TerrainController.Instance.LODtarget);
+                float radius = VoxelSettings.radius * VoxelSettings.MeterSizeX;
+                double voxelsPerMeter = VoxelSettings.voxelsPerMeter;
+                int LODlevel = 1;
+                if (distance > (radius / 10f) && distance < (radius / 10f) * 5) {
+                    voxelsPerMeter /= 2;
+                    LODlevel = 2;
+                }
+                else if (distance > (radius / 10f) * 5 && distance < radius) {
+                    voxelsPerMeter /= 4;
+                    LODlevel = 3;
+                }
+                /*else if (distance > (radius / 10f) * 6 && distance < radius) {
+                    voxelsPerMeter /= 10;
+                    LODlevel = 4;
+                }*/
+                else if (distance >= radius) {
+                    return;
+                }
+
+                if (LODlevel != oldLODlevel) {
+                    oldLODlevel = LODlevel;
+                    builderInstance.CalculateVariables(voxelsPerMeter, VoxelSettings.MeterSizeX, VoxelSettings.MeterSizeY, VoxelSettings.MeterSizeZ);
+                    builderInstance.Generate(surfaceModule,
+                        VoxelSettings.seed,
+                        VoxelSettings.enableCaves && (LODlevel <= 2),
+                        VoxelSettings.amplitude,
+                        VoxelSettings.caveDensity,
+                        VoxelSettings.grassOffset);
+                    Render(false);
+                }
+            }
+        });
+    }
+
     public void SpawnGrass()
     {
         surface = new List<Vector3Int>(builderInstance.GetSurfacePoints());
@@ -210,33 +247,68 @@ public class Chunk : MonoBehaviour {
         }
     }
 
-    public void Init(Vector3Int chunkPos, IModule module, IPageController pageController) {
+    public void Init(Vector3Int chunkPos, IModule module, IPageController pageController, double voxelsPerMeter = VoxelSettings.voxelsPerMeter) {
+        editQueue = new List<BlockChange>();
+        _lockObj = new object();
+        surface = new List<Vector3Int>();
         chunkPosition = chunkPos;
-        globalPosition = transform.position;
         surfaceModule = module;
         this.pageController = pageController;
         transform.position = VoxelConversions.ChunkCoordToWorld(chunkPos);
+        transform.parent = TerrainController.Instance.transform;
+        globalPosition = transform.position;
         _renderer = gameObject.GetComponent<MeshRenderer>();
         _filter = gameObject.GetComponent<MeshFilter>();
         _collider = gameObject.GetComponent<MeshCollider>();
         _renderer.material.SetTexture("_MainTex", TerrainController.Instance.textureAtlas);
         _player = TerrainController.Instance.player;
-        createChunkBuilder();
+        createChunkBuilder(voxelsPerMeter);
     }
 
-    public void createChunkBuilder() {
+    public void Init(Vector3Int chunkPos, Vector3 worldPos, IModule module, IPageController controller, int lodLevel, SmoothVoxelBuilder smoothBuilder) {
+        editQueue = new List<BlockChange>();
+        _lockObj = new object();
+        surface = new List<Vector3Int>();
+        chunkPosition = chunkPos;
+        surfaceModule = module;
+        LODlevel = lodLevel;
+        oldLODlevel = lodLevel;
+        pageController = controller;
+        transform.position = worldPos;
+        transform.parent = TerrainController.Instance.transform;
+        globalPosition = transform.position;
+        _renderer = gameObject.GetComponent<MeshRenderer>();
+        _filter = gameObject.GetComponent<MeshFilter>();
+        _collider = gameObject.GetComponent<MeshCollider>();
+        _renderer.material.SetTexture("_MainTex", TerrainController.Instance.textureAtlas);
+        _player = TerrainController.Instance.player;
+        builderInstance = smoothBuilder;
+        builder = smoothBuilder;
+    }
+
+    public void createChunkBuilder(double voxelsPerMeter = VoxelSettings.voxelsPerMeter) {
         float distance = Vector3.Distance(transform.position, TerrainController.Instance.LODtarget);
-        if (distance > (VoxelSettings.radius * VoxelSettings.MeterSizeX)) {
+        float radius = VoxelSettings.radius * VoxelSettings.MeterSizeX;
+        LODlevel = 1;
+        if (distance > (radius / 10f) && distance < (radius / 10f) * 5) {
+            voxelsPerMeter /= 2;
+            LODlevel = 2;
+        }
+        else if (distance > (radius / 10f) * 5 && distance < radius) {
+            voxelsPerMeter /= 4;
+            LODlevel = 3;
+        }
+        else if (distance >= radius) {
             _destroyed = true;
             TerrainController.Instance.DestroyChunk(chunkPosition);
             return;
         }
-        else {
-            builder = new SmoothVoxelBuilder(TerrainController.Instance, chunkPosition);
-            builder.SetBlockTypes(TerrainController.Instance.BlocksArray, TerrainController.Instance.AtlasUvs);
-            builderInstance = (SmoothVoxelBuilder)builder;
-            builderInstance.CalculateVariables(1/3f, VoxelSettings.MeterSizeX, VoxelSettings.MeterSizeY, VoxelSettings.MeterSizeZ);
-        }
+
+        builder = new SmoothVoxelBuilder(TerrainController.Instance, chunkPosition);
+        builder.SetBlockTypes(TerrainController.Instance.BlocksArray, TerrainController.Instance.AtlasUvs);
+        builderInstance = (SmoothVoxelBuilder)builder;
+        builderInstance.CalculateVariables(voxelsPerMeter, VoxelSettings.MeterSizeX, VoxelSettings.MeterSizeY, VoxelSettings.MeterSizeZ);
+
     }
 
     public void DebugFill(byte type)
@@ -256,19 +328,6 @@ public class Chunk : MonoBehaviour {
     }
 
     public void Generate() {
-        /*float distance = Vector3.Distance(position, TerrainController.Instance.LODtarget);
-        if (distance < (VoxelSettings.radius * VoxelSettings.MeterSizeX) / 2) {
-            voxelsPerMeter = 2;
-        }
-        else if (distance < VoxelSettings.radius * VoxelSettings.MeterSizeX) {
-            voxelsPerMeter = 1;
-        }
-        else {
-            _destroyed = true;
-            TerrainController.Instance.DestroyChunk(chunkPosition);
-            return;
-        }*/
-
         /*if (voxelsPerMeter != oldVoxelsPerMeter) {
             oldVoxelsPerMeter = voxelsPerMeter;
             BuilderGenerate();
@@ -280,18 +339,15 @@ public class Chunk : MonoBehaviour {
         }
     }
 
-    public float[] BuilderGenerate()
+    public void BuilderGenerate()
     {
-        float[] result = null;
-        result = ((SmoothVoxelBuilder)builder).Generate(surfaceModule,
-                                                 VoxelSettings.seed,
-                                                 VoxelSettings.enableCaves,
-                                                 VoxelSettings.amplitude,
-                                                 VoxelSettings.caveDensity,
-                                                 VoxelSettings.groundOffset,
-                                                 VoxelSettings.grassOffset);
+        ((SmoothVoxelBuilder)builder).Generate(surfaceModule,
+                                               VoxelSettings.seed,
+                                               VoxelSettings.enableCaves && (LODlevel <= 2),
+                                               VoxelSettings.amplitude,
+                                               VoxelSettings.caveDensity,
+                                               VoxelSettings.grassOffset);
         _generated = true;
-        return result;
     }
 
     /*public float[,] GenerateChunk() {
@@ -306,37 +362,6 @@ public class Chunk : MonoBehaviour {
         return result;
     }*/
 
-    public void Render(bool renderOnly) {
-        if (builder != null && !_destroyed) {
-            MeshData meshData = RenderChunk(renderOnly);
-            Loom.QueueOnMainThread(() => {
-                if (_filter != null && _collider != null && _renderer != null && !_destroyed) {
-                    Mesh mesh = new Mesh();
-                    mesh.vertices = meshData.vertices;
-                    mesh.triangles = meshData.triangles;
-                    //mesh.uv = meshData.UVs;
-
-                    mesh.RecalculateNormals();
-
-                    _filter.sharedMesh = mesh;
-                    _collider.sharedMesh = mesh;
-                    //_renderer.material.SetTexture("_MainTex", TerrainController.Instance.textureAtlas);
-
-                    size = meshData.GetSize();
-                    vertSize = meshData.vertices.Length;
-                    triSize = meshData.triangles.Length;
-                    meshData.vertices = null;
-                    meshData.triangles = null;
-                    meshData.UVs = null;
-
-                    SpawnGrass();
-
-                    _rendered = true;
-                }
-            });
-        }
-    }
-
     public Block GetBlock(int x, int y, int z)
     {
         Block result = default(Block);
@@ -346,6 +371,10 @@ public class Chunk : MonoBehaviour {
         }
 
         return result;
+    }
+
+    void OnApplicationQuit() {
+        Close();
     }
 
     public void Close()
@@ -358,7 +387,89 @@ public class Chunk : MonoBehaviour {
         }
     }
 
-    private MeshData RenderChunk(bool renderOnly) {
-        return builder.Render(renderOnly);
+    public void Render(bool renderOnly) {
+        if (builder != null && !_destroyed) {
+            Render(builder.Render(renderOnly));
+        }
+    }
+
+    public void Render (MeshData meshData) {
+        if (!_destroyed) {
+            Loom.QueueOnMainThread(() => {
+                if (_filter != null && _collider != null && _renderer != null && !_destroyed) {
+                    _rendered = true;
+                    Mesh mesh = new Mesh();
+                    canUpdateForLOD = meshData.vertices.Length > 0;
+                    if (!canUpdateForLOD && LODlevel >= 2) {
+                        _destroyed = true;
+                        TerrainController.Instance.DestroyChunk(chunkPosition);
+                        return;
+                    }
+                    mesh.vertices = meshData.vertices;
+                    mesh.triangles = meshData.triangles;
+                    //mesh.uv = meshData.UVs;
+
+                    mesh.RecalculateNormals();
+
+                    _filter.sharedMesh = mesh;
+                    if (LODlevel <= 2)
+                        _collider.sharedMesh = mesh;
+                    //_renderer.material.SetTexture("_MainTex", TerrainController.Instance.textureAtlas);
+
+                    size = meshData.GetSize();
+                    vertSize = meshData.vertices.Length;
+                    triSize = meshData.triangles.Length;
+                    meshData.vertices = null;
+                    meshData.triangles = null;
+                    meshData.UVs = null;
+                }
+            });
+        }
+    }
+
+    public static void CreateChunk(Vector3Int chunkPos, string thread, int threadIndex, IModule module, TerrainController controller) {
+        Vector3 worldPos = VoxelConversions.ChunkCoordToWorld(chunkPos);
+        float distance = Vector3.Distance(worldPos, TerrainController.Instance.LODtarget);
+        float radius = VoxelSettings.radius * VoxelSettings.MeterSizeX;
+        double voxelsPerMeter = VoxelSettings.voxelsPerMeter;
+        int LODlevel = 1;
+        if (distance > (radius / 10f) && distance < (radius / 10f) * 5) {
+            voxelsPerMeter /= 2;
+            LODlevel = 2;
+        }
+        else if (distance > (radius / 10f) * 5 && distance < radius) {
+            voxelsPerMeter /= 4;
+            LODlevel = 3;
+        }
+        /*else if (distance > (radius / 10f) * 6 && distance < radius) {
+            voxelsPerMeter /= 10;
+            LODlevel = 4;
+        }*/
+        else if (distance >= radius) {
+            return;
+        }
+        SmoothVoxelBuilder builder = new SmoothVoxelBuilder(TerrainController.Instance, chunkPos);
+        builder.SetBlockTypes(TerrainController.Instance.BlocksArray, TerrainController.Instance.AtlasUvs);
+        builder.CalculateVariables(voxelsPerMeter, VoxelSettings.MeterSizeX, VoxelSettings.MeterSizeY, VoxelSettings.MeterSizeZ);
+        builder.Generate(module,
+                        VoxelSettings.seed,
+                        VoxelSettings.enableCaves && (LODlevel <= 2),
+                        VoxelSettings.amplitude,
+                        VoxelSettings.caveDensity,
+                        VoxelSettings.grassOffset);
+        MeshData meshData = builder.Render(false);
+        if (meshData.vertices.Length == 0)
+            return;
+
+        Loom.QueueOnMainThread(() => {
+            if (!TerrainController.Instance.Chunks.ContainsKey(chunkPos)) {
+                Chunk chunk = GameObject.Instantiate(TerrainController.Instance.chunkPrefab).GetComponent<Chunk>();
+                chunk.name = string.Format("Chunk_{0}.{1}.{2}", chunkPos.x, chunkPos.y, chunkPos.z);
+                chunk.Init(chunkPos, worldPos, module, controller, LODlevel, builder);
+                chunk.Render(meshData);
+                TerrainController.Instance.AddChunk(chunkPos, chunk);
+            }
+        });
+
     }
 }

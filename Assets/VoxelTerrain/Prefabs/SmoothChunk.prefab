@@ -12,6 +12,7 @@ GameObject:
   - 23: {fileID: 2343454}
   - 64: {fileID: 6430130}
   - 54: {fileID: 5477148}
+  - 114: {fileID: 11467024}
   m_Layer: 9
   m_Name: SmoothChunk
   m_TagString: Untagged
@@ -91,6 +92,76 @@ MeshCollider:
   serializedVersion: 2
   m_Convex: 0
   m_Mesh: {fileID: 0}
+--- !u!114 &11467024
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 181032}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97c6664987b6c1b489f78cbde5fd795d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  chunkPosition:
+    x: 0
+    y: 0
+    z: 0
+  globalPosition: {x: 0, y: 0, z: 0}
+  builderInstance:
+    blocks: []
+    SurfaceData: []
+    BlockTypes: []
+    AtlasUvs: []
+    neighbors: []
+    Initialized: 0
+    deactivated: 0
+    locOffset: []
+    globalOffsets: []
+    VoxelsPerMeter: 0
+    ChunkMeterSizeX: 0
+    ChunkMeterSizeY: 0
+    ChunkMeterSizeZ: 0
+    ChunkSizeX: 0
+    ChunkSizeY: 0
+    ChunkSizeZ: 0
+    skipDist: 0
+    half: 0
+    xSideLength: 0
+    ySideLength: 0
+    zSideLength: 0
+    blocksFilled: 0
+    generatedInside: 0
+    generatedOutside: 0
+    allParsed: 0
+    location:
+      x: 0
+      y: 0
+      z: 0
+    seed: 0
+    heightmapSize: 0
+    enableCaves: 0
+    amp: 0
+    caveDensity: 0
+    groundOffset: 0
+    grassOffset: 0
+    noiseGenTime: 
+    renderTime: 
+    miscTime: 
+    noiseRuns: 0
+  editQueue: []
+  grassPrefab: {fileID: 0}
+  treePrefabs: []
+  disappearDistance: 30
+  maxGrassDistance: 3
+  grassPerMeter: 1
+  size: 0
+  vertSize: 0
+  triSize: 0
+  LODlevel: 0
+  surface: []
+  surface2D: []
+  voxelsPerMeter: 1
 --- !u!1001 &100100000
 Prefab:
   m_ObjectHideFlags: 1

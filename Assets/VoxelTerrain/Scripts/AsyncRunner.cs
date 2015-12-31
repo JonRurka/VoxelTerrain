@@ -45,7 +45,10 @@ class AsyncRunner : IDisposable
     {
         while (run)
         {
-            resetEvent.WaitOne(1);
+            if (actions.Count > 0)
+                resetEvent.WaitOne(1);
+            else
+                resetEvent.WaitOne(10);
             try
             {
                 lock (actions) {
@@ -59,13 +62,15 @@ class AsyncRunner : IDisposable
                     {
                         try
                         {
-                            functionRunning = true;
-                            FuctionWorkTime.Reset();
-                            FuctionWorkTime.Start();
-                            _currentActions[i]();
-                            _currentActions[i] = null;
-                            FuctionWorkTime.Stop();
-                            functionRunning = false;
+                            if (run) {
+                                functionRunning = true;
+                                FuctionWorkTime.Reset();
+                                FuctionWorkTime.Start();
+                                _currentActions[i]();
+                                _currentActions[i] = null;
+                                FuctionWorkTime.Stop();
+                                functionRunning = false;
+                            }
                             //ConsoleWpr.LogDebug(threadName + ": function Called.");
                         }
                         catch (Exception e)

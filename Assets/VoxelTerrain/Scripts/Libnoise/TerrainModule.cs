@@ -40,6 +40,8 @@ namespace LibNoise
             selector.EdgeFalloff = 0.5;
             _module = selector;
 
+            ScaleOutput scaleSelector = new ScaleOutput(selector, VoxelSettings.amplitude);
+            _module = new BiasOutput(scaleSelector, VoxelSettings.groundOffset);
         }
 
         public double GetValue(double x, double y, double z)

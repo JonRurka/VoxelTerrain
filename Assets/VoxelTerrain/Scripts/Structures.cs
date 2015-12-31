@@ -185,7 +185,7 @@ public struct MeshData {
 public struct Block
 {
     public byte type;
-    public float iso;
+    public double iso;
     public bool set;
     public Block(byte type)
     {

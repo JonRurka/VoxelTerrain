@@ -15,7 +15,6 @@ public static class SafeDebug {
     }
 
     public static void LogError(object message, Exception e = null) {
-        TerrainController.ThereIsAnError = true;
         string stackTrace = StackTraceUtility.ExtractStackTrace();
         string ErrorLocation = string.Empty;
 #if UNITY_EDITOR

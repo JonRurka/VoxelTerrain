@@ -20,8 +20,7 @@ public class GameControl : MonoBehaviour {
 	}
 
     void SpawnPlayer() {
-        return;
-        Debug.Log("generation Finished!");
+        Debug.Log("spawning player.");
         if (!playSpawned) {
             playerObj = (GameObject)Instantiate(playerPrefab, new Vector3(50, 150, 0), Quaternion.identity);
             TerrainController.Instance.player = playerObj;

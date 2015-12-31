@@ -100,7 +100,7 @@ public class VoxelBuilder : IVoxelBuilder {
         AtlasUvs = _AtlasUvs;
     }
 
-    public float[] Generate(IModule module, int _seed, bool _enableCaves, float _amp, float _caveDensity, float _groundOffset, float _grassOffset)
+    public void Generate(IModule module, int _seed, bool _enableCaves, float _amp, float _caveDensity, float _grassOffset)
     {
         try
         {
@@ -109,7 +109,6 @@ public class VoxelBuilder : IVoxelBuilder {
             enableCaves = _enableCaves;
             amp = _amp;
             caveDensity = _caveDensity;
-            groundOffset = _groundOffset;
             grassOffset = _grassOffset;
 
             RidgedMultifractal _caves = new RidgedMultifractal();
@@ -126,17 +125,14 @@ public class VoxelBuilder : IVoxelBuilder {
         {
             SafeDebug.LogError(string.Format("{0}\nFunction: Generate\n Chunk: {1}", e.Message, Location.ToString()), e);
         }
-        return null;
-        //return SurfaceData;
     }
 
-    public float[] Generate(int _seed, bool _enableCaves, float _amp, float _caveDensity, float _groundOffset, float _grassOffset) {
+    public void Generate(int _seed, bool _enableCaves, float _amp, float _caveDensity, float _grassOffset) {
         try {
             seed = _seed;
             enableCaves = _enableCaves;
             amp = _amp;
             caveDensity = _caveDensity;
-            groundOffset = _groundOffset;
             grassOffset = _grassOffset;
 
             Vector2Int bottomLeft = new Vector2(Location.x * ChunkSizeX, Location.z * ChunkSizeZ);
@@ -153,8 +149,6 @@ public class VoxelBuilder : IVoxelBuilder {
         catch (Exception e) {
             SafeDebug.LogError(e.Message + "\nFunction: Generate, Chunk: " + Location.ToString(), e);
         }
-        return null;
-        //return SurfaceData;
     }
 
     public MeshData Render(bool renderOnly) {

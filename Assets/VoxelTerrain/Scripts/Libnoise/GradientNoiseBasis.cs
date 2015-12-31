@@ -33,6 +33,7 @@ namespace LibNoise
         private const int SeedNoiseGen = 1013;
         private const int ShiftNoiseGen = 8;
 
+        #region rand
         private static double[] RandomVectors = 
         {
             -0.763874, -0.596439, -0.246489, 0.0,
@@ -292,6 +293,7 @@ namespace LibNoise
             0.991353, 0.112814, 0.0670273, 0.0,
             0.0337884, -0.979891, -0.196654, 0.0
         };
+        #endregion
 
         public double GradientCoherentNoise(double x, double y, double z, int seed,
             NoiseQuality noiseQuality)

@@ -13,7 +13,6 @@ public class TerrainController : MonoBehaviour, IPageController
     public static string WorldThreadName = "GenerationThread";
     public static string setBlockThreadName = "SetBlockThread";
     public static string GrassThreadName = "GrassThread";
-    public static bool ThereIsAnError = false;
     public static TerrainController Instance;
     public GameObject grassPrefab;
     public GameObject pathPointPrefab;
@@ -24,7 +23,7 @@ public class TerrainController : MonoBehaviour, IPageController
     public int threads = 2;
     public Vector3Int newPlayerChunkPos;
     public Vector3Int newPlayerVoxelPos;
-    public Vector3 LODtarget;
+    public Vector3 LODtarget = new Vector3(0, 100, 0);
     public int chunksInQueue;
     public int chunksGenerated;
     public int VoxelSize;
@@ -33,7 +32,7 @@ public class TerrainController : MonoBehaviour, IPageController
     public bool chunkNoExistError =false;
     public bool cannotFindBlock = false;
     public delegate void RenderComplete();
-    public event RenderComplete OnRenderComplete;
+    public event Action OnRenderComplete;
 
 
     public static Dictionary<byte, BlockType> blockTypes = new Dictionary<byte, BlockType>();
@@ -52,6 +51,7 @@ public class TerrainController : MonoBehaviour, IPageController
     private Vector3Int _oldPlayerChunkPos = new Vector3Int(500, 500, 500);
     private bool[] threadFinished;
     private Stopwatch watch = new Stopwatch();
+    public int progress = 0;
 
     List<Vector3Int> _tmpChunkList = new List<Vector3Int>();
     List<GameObject> pathObjects = new List<GameObject>();
@@ -62,6 +62,8 @@ public class TerrainController : MonoBehaviour, IPageController
     private bool _playerCreated = false;
     private System.Threading.ManualResetEvent _resetEvent;
     private Vector3 _playerPosition;
+    private bool _running = true;
+    private bool renderCompleteCalled = false;
 
     void Awake()
     {
@@ -70,8 +72,10 @@ public class TerrainController : MonoBehaviour, IPageController
 
 	// Use this for initialization
 	void Start () {
-        int skipDist = Mathf.RoundToInt(1 / VoxelSettings.voxelsPerMeter);
-        SafeDebug.Log(skipDist + ", " + 1 / VoxelSettings.voxelsPerMeter);
+        float radius = VoxelSettings.radius * VoxelSettings.MeterSizeX;
+        for (int i = 0; i < 10; i++) {
+            Debug.Log((radius / 10) * i);
+        }
     }
 	
 	// Update is called once per frame
@@ -80,18 +84,28 @@ public class TerrainController : MonoBehaviour, IPageController
         {
             _playerCreated = true;
             _playerPosition = player.transform.position;
-
-            /*if (Vector3.Distance(_oldPlayerVoxelPos, newPlayerVoxelPos) > 2)
-            {
-                _oldPlayerVoxelPos = newPlayerVoxelPos;
-                DeleteGrass();
-                SpawnGrass();
-            }*/
+            LODtarget = _playerPosition;
+            newPlayerVoxelPos = VoxelConversions.WorldToVoxel(_playerPosition);
+            newPlayerChunkPos = VoxelConversions.VoxelToChunk(newPlayerVoxelPos);
+            //Debug.Log(generateArroundChunk + ", " + newPlayerChunkPos + ", " + Vector3.Distance(generateArroundChunk, newPlayerChunkPos));
+            if (_oldPlayerChunkPos != newPlayerChunkPos && !_generating) {
+                // generate around point.
+                //Debug.Log("Debug filling " + newPlayerChunkPos + ".");
+                _generateArroundChunk = _oldPlayerChunkPos = newPlayerChunkPos;
+                GenerateSpherical(newPlayerChunkPos);
+            }
+            foreach(Chunk chk in Chunks.Values.ToArray()) 
+                chk.ChunkUpdate();
         }
+    
        
 	}
 
-    void ChunkUpdate() {
+    void OnApplicationQuit() {
+        
+    }
+
+    /*void ChunkUpdate() {
         foreach (Chunk chk in Chunks.Values.ToArray()) {
             if (_playerCreated) {
                 _resetEvent.WaitOne(5);
@@ -110,7 +124,7 @@ public class TerrainController : MonoBehaviour, IPageController
                 chk.ChunkUpdate();
             }
         }
-    }
+    }*/
 
     public void SpawnGrass()
     {
@@ -210,43 +224,77 @@ public class TerrainController : MonoBehaviour, IPageController
         TerrainModule module = new TerrainModule(VoxelSettings.seed);
         Vector3Int chunkPos = new Vector3Int(-1, 2, -1);
         threadFinished = new bool[1];
-        SpawnChunks(new Vector3Int[] { chunkPos }, module);
-        GenerateChunks("testGen", 0, Chunks.Values.ToArray());
+        SpawnChunk(new Vector3Int(0, 0, 0), module);
+        SpawnChunk(new Vector3Int(1, 0, 0), module, 1/3f);
+        //GenerateChunks("testGen", 0, Chunks.Values.ToArray());
     }
 
     public void GenerateSpherical(Vector3Int center) {
         _resetEvent = new System.Threading.ManualResetEvent(false);
         LODtarget = center;
+        //Loom.QueueAsyncTask("chunkUpdate", ChunkUpdate);
         Loom.QueueAsyncTask(WorldThreadName, () => {
-            SafeDebug.Log("gen terrain");
-            Vector3Int[][] chunkPositions = GetChunkLocationsAroundPoint(threads, center);
-            for (int i = 0; i < chunkPositions.Length; i++)
-                chunksInQueue += chunkPositions[i].Length;
-            Loom.QueueOnMainThread(() => {
-                watch.Start();
-                TerrainModule module = new TerrainModule(VoxelSettings.seed);
-                threadFinished = new bool[chunkPositions.Length];
-                for (int i = 0; i < chunkPositions.Length; i++) {
-                    SpawnChunks(chunkPositions[i], module);
-                    GenerateChunks("Generator" + i, i, Chunks.GetValues(chunkPositions[i]));
+            TerrainModule module = new TerrainModule(VoxelSettings.seed);
+            for (int i = 0; i < VoxelSettings.radius; i++) {
+                Vector3Int[][] chunkBand = GetChunkLocationsAroundPoint(threads, i, center);
+                for (int threadIndex = 0; threadIndex < chunkBand.Length; threadIndex++) {
+                    Vector3Int[] positions = chunkBand[threadIndex];
+                    GenerateChunks("Generator" + threadIndex, threadIndex, module, positions);
                 }
-                Loom.QueueAsyncTask("chunkUpdate", ChunkUpdate);
-            });
+            }
+            
         });
     }
 
-    public Vector3Int[][] GetChunkLocationsAroundPoint(int threads, Vector3Int center)
+    public Vector3Int[][] GetChunkLocationsAroundPoint(int threads, int radius, Vector3Int center)
     {
         Vector3Int[][] result = new Vector3Int[0][];
         try {
             List<List<Vector3Int>> chunksInSphere = new List<List<Vector3Int>>();
-            List<Vector3Int> counted = new List<Vector3Int>();
-            for (int i = 0; i < threads; i++)
+            if (radius > 0) {
+                List<Vector3Int> counted = new List<Vector3Int>();
+                for (int i = 0; i < threads; i++)
+                    chunksInSphere.Add(new List<Vector3Int>());
+                int threadIndex = 0;
+                int circumference = (int)((2 * Mathf.PI * radius) + 1) / 2;
+                for (int i = 0; i <= circumference; i++) {
+                    float angle = Scale(i, 0, circumference, 0, 360);
+                    int x = (int)(center.x + radius * Mathf.Cos(angle * (Mathf.PI / 180)));
+                    int z = (int)(center.z + radius * Mathf.Sin(angle * (Mathf.PI / 180)));
+
+                    for (int y = -VoxelSettings.maxChunksY/2; y < VoxelSettings.maxChunksY/2; y++) {
+                        Vector3Int[] positions = new Vector3Int[] {
+                        new Vector3Int(x, y, z),
+                        new Vector3Int(x + 1, y, z),
+                        new Vector3Int(x - 1, y, z),
+                        new Vector3Int(x, y, z + 1),
+                        new Vector3Int(x, y, z - 1),
+                        new Vector3Int(x - 1, y, z - 1),
+                        new Vector3Int(x + 1, y, z - 1),
+                        new Vector3Int(x + 1, y, z + 1),
+                        new Vector3Int(x - 1, y, z + 1),
+                    };
+                        if (threadIndex >= threads)
+                            threadIndex = 0;
+                        for (int posIndex = 0; posIndex < positions.Length; posIndex++) {
+                            if (!BuilderExists(positions[posIndex].x, positions[posIndex].y, positions[posIndex].z) && !counted.Contains(positions[posIndex])) {
+                                chunksInSphere[threadIndex].Add(positions[posIndex]);
+                                counted.Add(positions[posIndex]);
+                            }
+                        }
+                        threadIndex++;
+                        progress++;
+                    }
+                }
+            }
+            else {
                 chunksInSphere.Add(new List<Vector3Int>());
-            int threadIndex = 0;
-            for (int i = 0; i < VoxelSettings.radius; i++) {
-                for (int x = center.x - i; x < center.x + i; x++) {
-                    for (int z = center.z - i; z < center.z + i; z++) {
+                chunksInSphere[0].Add(center);
+            }
+
+            /*for (int radius = startRadius; radius < endRadius; radius++) {
+                for (int x = center.x - radius; x < center.x + radius; x++) {
+                    for (int z = center.z - radius; z < center.z + radius; z++) {
                         for (int y = 0; y <= VoxelSettings.maxChunksY; y++) {
                             if (threadIndex >= threads)
                                 threadIndex = 0;
@@ -254,9 +302,8 @@ public class TerrainController : MonoBehaviour, IPageController
                             /*if (!BuilderExists(x, y, z) && IsInSphere(center, VoxelSettings.radius, new Vector3Int(x, center.y, z)) && !counted.Contains(new Vector3Int(x, y, z))) {
                                 chunksInSphere[threadIndex].Add(new Vector3Int(x, y, z));
                                 counted.Add(new Vector3Int(x, y, z));
-                            }*/
-                            int distance = Vector3Int.Distance(center, new Vector3Int(x, center.y, z));
-                            if (!BuilderExists(x, y, z) &&/* distance < VoxelSettings.radius && */!counted.Contains(new Vector3Int(x, y, z))) {
+                            }
+                            if (!BuilderExists(x, y, z) && !counted.Contains(new Vector3Int(x, y, z))) {
                                 chunksInSphere[threadIndex].Add(new Vector3Int(x, y, z));
                                 counted.Add(new Vector3Int(x, y, z));
                             }
@@ -264,7 +311,7 @@ public class TerrainController : MonoBehaviour, IPageController
                         }
                     }
                 }
-            }
+            }*/
             result = new Vector3Int[chunksInSphere.Count][];
             for (int i = 0; i < result.Length; i++) {
                 result[i] = chunksInSphere[i].ToArray();
@@ -336,39 +383,26 @@ public class TerrainController : MonoBehaviour, IPageController
         }
     }
 
-    public void GenerateChunks(string threadName, int index, Chunk[] chunks)
+    public void GenerateChunks(string threadName, int index, IModule module, Vector3Int[] chunks)
     {
         Loom.QueueAsyncTask(threadName, () =>
         {
+            
             try {
-                //SafeDebug.Log("Generating " + chunkLocations.Length + " chunks.");
                 for (int i = 0; i < chunks.Length; i++) {
-                    GenerateChunk(chunks[i]);
+                    _generating = true;
+                    Chunk.CreateChunk(chunks[i], threadName, index, module, this);
                     chunksGenerated++;
                 }
-                SafeDebug.Log(watch.Elapsed.ToString());
-                //SetVoxelSize();
-                //setMeshSize();
-
-                Loom.QueueOnMainThread(() => {
-                    Debug.Log("gen Complete: " + threadName);
-                    threadFinished[index] = true;
-                    _generating = false;
-                    chunksInQueue = 0;
-                    chunksGenerated = 0;
-
-                    //GameManager.Status = "";
-                    bool allFinished = true;
-                    for (int i = 0; i < threadFinished.Length; i++) {
-                        if (!threadFinished[i]) {
-                            allFinished = false;
-                            break;
+                if (!renderCompleteCalled) {
+                    for (int i = 0; i < chunks.Length; i++) {
+                        if (Vector3.Distance(new Vector3Int(), chunks[i]) > VoxelSettings.radius / 2) {
+                            renderCompleteCalled = true;
+                            Loom.QueueOnMainThread(OnRenderComplete);
                         }
-
                     }
-                    if (allFinished)
-                        OnRenderComplete();
-                });
+                }
+                _generating = false;
             }
             catch(Exception e) {
                 SafeDebug.LogError(string.Format("{0}: {1}\n {2}", e.GetType().ToString(), e.Message, e.StackTrace));
@@ -388,7 +422,8 @@ public class TerrainController : MonoBehaviour, IPageController
         }
         catch (Exception e)
         {
-            SafeDebug.LogError(e.Message + "\nFunction: GenerateChunks" + "\n" + chunk.chunkPosition.x + "," + chunk.chunkPosition.y + "," + chunk.chunkPosition.z, e);
+            SafeDebug.LogError(e.Message + "\nFunction: GenerateChunks: " + chunk.chunkPosition.x + "," + chunk.chunkPosition.y + "," + chunk.chunkPosition.z);
+            SafeDebug.LogError(e.StackTrace);
         }
     }
 
@@ -401,18 +436,26 @@ public class TerrainController : MonoBehaviour, IPageController
 
     public bool BuilderExists(int x, int y, int z)
     {
-        if (Chunks.ContainsKey(new Vector3Int(x, y, z)))
-        {
-            return (Chunks[new Vector3Int(x, y, z)] != null);
-        } 
+        try {
+            if (Chunks.ContainsKey(new Vector3Int(x, y, z))) {
+                return (Chunks[new Vector3Int(x, y, z)] != null);
+            }
+        }
+        catch (KeyNotFoundException e) {
+            return false;
+        }
         return false;
     }
 
     public bool BuilderGenerated(int x, int y, int z)
     {
-        if (BuilderExists(x, y, z))
-        {
-            return Chunks[new Vector3Int(x, y, z)].Generated;
+        try {
+            if (BuilderExists(x, y, z)) {
+                return Chunks[new Vector3Int(x, y, z)].Generated;
+            }
+        }
+        catch (KeyNotFoundException e) {
+            return false;
         }
         return false;
     }
@@ -420,10 +463,14 @@ public class TerrainController : MonoBehaviour, IPageController
     public IVoxelBuilder GetBuilder(int x, int y, int z)
     {
         IVoxelBuilder result = null;
-        Vector3Int location = new Vector3Int(x, y, z);
-        if (BuilderExists(x, y, z))
-        {
-            result = Chunks[new Vector3Int(x, y, z)].builder;
+        try {
+            Vector3Int location = new Vector3Int(x, y, z);
+            if (BuilderExists(x, y, z)) {
+                result = Chunks[new Vector3Int(x, y, z)].builder;
+            }
+        }
+        catch(KeyNotFoundException e) {
+            return result;
         }
         return result;
     }
@@ -635,11 +682,10 @@ public class TerrainController : MonoBehaviour, IPageController
     {
         try {
             if (BuilderExists(chunk.x, chunk.y, chunk.z)) {
-                Chunks[chunk].Close();
-                Loom.QueueOnMainThread(() => {
-                    Destroy(Chunks[chunk].gameObject);
-                    Chunks.Remove(chunk);
-                });
+                Chunk chunkInst = Chunks[chunk];
+                chunkInst.Close();
+                Chunks.Remove(chunk);
+                Loom.QueueOnMainThread(() => Destroy(chunkInst.gameObject));
             }
         }
         catch (Exception e) {
@@ -661,21 +707,26 @@ public class TerrainController : MonoBehaviour, IPageController
         }
     }
 
-    private void SpawnChunks(Vector3Int[] locations, IModule module) {
+    private void SpawnChunks(Vector3Int[] locations, IModule module, double voxelsPerMeter = VoxelSettings.voxelsPerMeter) {
         foreach (Vector3Int chunkPos in locations)
-            SpawnChunk(chunkPos, module);
+            SpawnChunk(chunkPos, module, voxelsPerMeter);
     }
 
-    private void SpawnChunk(Vector3Int location, IModule module)
+    private void SpawnChunk(Vector3Int location, IModule module, double voxelsPerMeter = VoxelSettings.voxelsPerMeter)
     {
-        if (!Chunks.ContainsKey(new Vector3Int(location.x, location.y, location.z)))
+        if (!Chunks.ContainsKey(location))
         {
-            Chunk chunk = Instantiate(chunkPrefab).AddComponent<Chunk>();
-            chunk.transform.parent = transform;
+            Chunk chunk = Instantiate(chunkPrefab).GetComponent<Chunk>();
             chunk.grassPrefab = grassPrefab;
             chunk.name = string.Format("Chunk_{0}.{1}.{2}", location.x, location.y, location.z);
-            chunk.Init(new Vector3Int(location.x, location.y, location.z), module, this);
-            Chunks.Add(new Vector3Int(location.x, location.y, location.z), chunk);
+            chunk.Init(location, module, this, voxelsPerMeter);
+            Chunks.Add(location, chunk);
+        }
+    }
+
+    public void AddChunk(Vector3Int pos, Chunk chunk) {
+        if (BuilderExists(pos.x, pos.y, pos.z)) {
+            Chunks.Add(pos, chunk);
         }
     }
 
@@ -697,5 +748,9 @@ public class TerrainController : MonoBehaviour, IPageController
         int blockArraySize = VoxelSettings.ChunkSizeX * VoxelSettings.ChunkSizeY * VoxelSettings.ChunkSizeZ * blockStructSize;
         int heightMapArraySize = VoxelSettings.ChunkSizeX * VoxelSettings.ChunkSizeZ * sizeof(float);
         return blockArraySize + heightMapArraySize;
+    }
+
+    private float Scale(float value, float oldMin, float oldMax, float newMin, float newMax) {
+        return newMin + (value - oldMin) * (newMax - newMin) / (oldMax - oldMin);
     }
 }

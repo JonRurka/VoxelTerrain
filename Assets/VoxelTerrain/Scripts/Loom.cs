@@ -326,6 +326,19 @@ public class Loom : MonoBehaviour {
     }*/
 
     void OnApplicationQuit() {
+        Close();
+    }
+
+    IEnumerator SpreadOut() {
+        for (int i = 0; i < _spreadOutActions.Count; i++) {
+            _spreadOutActions[i]();
+            _spreadOutActions[i] = null;
+            yield return new WaitForEndOfFrame();
+        }
+        _spreadOutActions.Clear();
+    }
+
+    public void Close() {
         if (_actions != null) {
             _actions.Clear();
             _actions = null;
@@ -349,14 +362,6 @@ public class Loom : MonoBehaviour {
             _currentDelayed.Clear();
             _currentDelayed = null;
         }
-    }
-
-    IEnumerator SpreadOut() {
-        for (int i = 0; i < _spreadOutActions.Count; i++) {
-            _spreadOutActions[i]();
-            _spreadOutActions[i] = null;
-            yield return new WaitForEndOfFrame();
-        }
-        _spreadOutActions.Clear();
+        Debug.Log("Loom closed");
     }
 }
