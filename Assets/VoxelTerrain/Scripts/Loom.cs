@@ -118,6 +118,9 @@ public class Loom : MonoBehaviour {
     }
 
     public static void QueueAsyncTask(string thread, Action e) {
+        if (Current == null)
+            return;
+
         lock (Current._AsynAction) {
             try {
                 if (Current._AsynAction.ContainsKey(thread)) {
@@ -136,6 +139,9 @@ public class Loom : MonoBehaviour {
 
     public static void QueueMessage(messageType type, string message)
     {
+        if (Current == null)
+            return;
+
         lock(Current._messages)
         {
             try

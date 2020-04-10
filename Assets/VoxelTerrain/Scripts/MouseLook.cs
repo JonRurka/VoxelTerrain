@@ -65,14 +65,14 @@ public class MouseLook : MonoBehaviour {
                     point += (new Vector3(hit.normal.x, hit.normal.y, hit.normal.z) * -((1f / 3f) / 4f));
                     Vector3 localPos = transform.InverseTransformPoint(point);
                     if (Input.GetKeyDown(KeyCode.Mouse0)) {
-                        Chunk chunk = hit.collider.GetComponent<Chunk>();
+                        SmoothChunk chunk = hit.collider.GetComponent<SmoothChunk>();
                         if (chunk) {
                             //chunk.RemoveBlock(hit);
                             Debug.Log("Attempting to remove block");
                         }
                     }
                     if (Input.GetKeyDown(KeyCode.Mouse1)) {
-                        Chunk chunk = hit.collider.GetComponent<Chunk>();
+                        SmoothChunk chunk = hit.collider.GetComponent<SmoothChunk>();
                         if (chunk) {
                             //chunk.AddBlock(hit, 5);
                             Debug.Log("Attempting to add block");

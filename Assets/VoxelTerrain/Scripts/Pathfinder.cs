@@ -35,7 +35,7 @@ public class Pathfinder {
             cameFrom.Clear();
             frontier.Add(start);
             cameFrom.Add(start, start);
-            int maxDistance = (VoxelSettings.radius * VoxelSettings.ChunkSizeX * 2);
+            int maxDistance = (SmoothVoxelSettings.radius * SmoothVoxelSettings.ChunkSizeX * 2);
             double maxBlocks = (4d / 3d) * Math.PI * Math.Pow(maxDistance, 3);
             Stopwatch watch = new Stopwatch();
             watch.Start();

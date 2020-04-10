@@ -153,29 +153,35 @@ public struct Vector2Int {
 public struct MeshData {
     public Vector3[] vertices;
     public int[] triangles;
+    public Vector3[] normals;
     public Vector2[] UVs;
-    public Vector2[] UVs2;
-    public Vector2[] UVs3;
+    //public Color[] Colors;
+    //public Vector2[] UVs2;
+    //public Vector2[] UVs3;
     public MeshData(Vector3[] _vertices, int[] _triangles, Vector2[] _UVs) {
         vertices = _vertices;
         triangles = _triangles;
         UVs = _UVs;
-        UVs2 = null;
-        UVs3 = null;
+        normals = null;
+        //Colors = null;
+        //UVs2 = null;
+        //UVs3 = null;
     }
-    public MeshData(Vector3[] _vertices, int[] _triangles, Vector2[] _UVs, Vector2[] _UVs2, Vector2[] _UVs3)
+    public MeshData(Vector3[] _vertices, int[] _triangles, Vector2[] _UVs, Vector3[] _normals)
     {
         vertices = _vertices;
         triangles = _triangles;
         UVs = _UVs;
-        UVs2 = _UVs2;
-        UVs3 = _UVs3;
+        normals = _normals;
+        //Colors = data;
+        //UVs2 = _UVs2;
+        //UVs3 = _UVs3;
     }
     public int GetSize()
     {
         int vertSize = vertices.Length * 12;
         int triSize = triangles.Length * 4;
-        int uvSize = UVs.Length * 8;
+        int uvSize = 0;// UVs.Length * 8;
         return vertSize + triSize + uvSize;
     }
 }
@@ -184,10 +190,10 @@ public struct MeshData {
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct Block
 {
-    public byte type;
-    public double iso;
+    public uint type;
+    public float iso;
     public bool set;
-    public Block(byte type)
+    public Block(uint type)
     {
         this.type = type;
         this.iso = 0;
@@ -199,10 +205,61 @@ public struct Block
         this.type = 0;
         this.set = false;
     }
-    public Block(byte type, float iso)
+    public Block(uint type, float iso)
     {
         this.iso = iso;
         this.type = type;
         this.set = false;
+    }
+}
+
+[Serializable]
+[StructLayout(LayoutKind.Sequential, Pack = 1)] 
+public struct GridPoint
+{
+    public float x;
+    public float y;
+    public float z;
+    public float iso;
+    public uint type;
+    public Vector3Int OriginLocal;
+    public Vector3Int OriginGlobal;
+
+    public GridPoint(float x, float y, float z)
+    {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        iso = 0;
+        type = 0;
+        OriginLocal = new Vector3Int();
+        OriginGlobal = new Vector3Int();
+    }
+
+    public GridPoint(float x, float y, float z, float iso)
+    {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.iso = iso;
+        type = 0;
+        OriginLocal = new Vector3Int();
+        OriginGlobal = new Vector3Int();
+    }
+
+    public GridPoint(float x, float y, float z, float iso, uint type)
+    {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.iso = iso;
+        this.type = type;
+        OriginLocal = new Vector3Int();
+        OriginGlobal = new Vector3Int();
+    }
+
+    public static implicit operator Vector3(GridPoint input)
+    {
+        return new Vector3(input.x, input.y, input.z);
     }
 }

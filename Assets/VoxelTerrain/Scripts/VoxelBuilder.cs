@@ -206,12 +206,12 @@ public class VoxelBuilder : IVoxelBuilder {
                                 Vector3Int noisePos = new Vector3Int(NoiseLocationX, NoiseLocationY, NoiseLocationZ);
                                 Vector3Int globalPos = new Vector3Int(superLocX, superLocY, superLocZ);
                                 Vector3Int localPos = new Vector3Int(localX, localY, localZ);
-                                byte _byteType = GetBlockType(localPos, noisePos, globalPos, true);
+                                uint _byteType = GetBlockType(localPos, noisePos, globalPos, true);
                                 BlockType _type = BlockTypes[_byteType];
                                 int[] _textures = _type.textureIndex;
 
                                 getSideWatch.Start();
-                                byte[] surroundingBlocks = GetSurroundingBlocks(noisePos, globalPos, localPos, true);
+                                uint[] surroundingBlocks = GetSurroundingBlocks(noisePos, globalPos, localPos, true);
                                 getSideWatch.Stop();
 
                                 renderWatch.Start();
@@ -223,9 +223,9 @@ public class VoxelBuilder : IVoxelBuilder {
                 }
             }
             catch (Exception e) {
-                SafeDebug.LogError("Message: " + e.Message + ", \nFunction: Render,\nLocation: " + Location +
+                /*SafeDebug.LogError("Message: " + e.Message + ", \nFunction: Render,\nLocation: " + Location +
                                     string.Format("\nglobal: {0}/{1}, {2}/{3}, {4}/{5}\nlocal: {6}/{7}, {8}/{9}, {10}/{11}", 
-                                    superLocX, VoxelSettings.SuperSizeX, superLocY, VoxelSettings.SuperSizeY, superLocZ, VoxelSettings.SuperSizeZ, localX, ChunkSizeX, localY, ChunkSizeY, localZ, ChunkSizeZ), e);
+                                    superLocX, SmoothVoxelSettings.SuperSizeX, superLocY, SmoothVoxelSettings.SuperSizeY, superLocZ, SmoothVoxelSettings.SuperSizeZ, localX, ChunkSizeX, localY, ChunkSizeY, localZ, ChunkSizeZ), e);*/
             }
             watch.Stop();
             totalTime = watch.Elapsed.ToString();
@@ -273,13 +273,13 @@ public class VoxelBuilder : IVoxelBuilder {
                     for (superLocY = yStart, localY = 0; localY < ChunkSizeY; superLocY++, localY++) {
                         if (!deactivated)
                         {
-                            byte _byteType = GetBlock(localX, localY, localZ).type;
+                            uint _byteType = GetBlock(localX, localY, localZ).type;
                             BlockType _type = BlockTypes[_byteType];
                             int[] _textures = _type.textureIndex;
                             Vector3Int globalPos = new Vector3Int(superLocX, superLocY, superLocZ);
                             Vector3Int localPos = new Vector3Int(localX, localY, localZ);
 
-                            byte[] surroundingBlocks = GetSurroundingBlocks(globalPos, globalPos, localPos, false);
+                            uint[] surroundingBlocks = GetSurroundingBlocks(globalPos, globalPos, localPos, false);
 
                             RenderSides(_type, surroundingBlocks, globalPos, localPos, ref vertices, ref triangles, ref uv, sideLength, _type.textureIndex);
                         }
@@ -291,11 +291,11 @@ public class VoxelBuilder : IVoxelBuilder {
         return new MeshData(vertices.ToArray(), triangles.ToArray(), uv.ToArray());
     }
 
-    public byte GetBlockType(int LocalPositionX, int LocalPositionY, int LocalPositionZ, int NoiseLocationX, int NoiseLocationY, int NoiseLocationZ, int globalY, bool generate) {
+    public uint GetBlockType(int LocalPositionX, int LocalPositionY, int LocalPositionZ, int NoiseLocationX, int NoiseLocationY, int NoiseLocationZ, int globalY, bool generate) {
         return GetBlockType(new Vector3Int(LocalPositionX, LocalPositionY, LocalPositionZ), new Vector3Int(NoiseLocationX, NoiseLocationY, NoiseLocationZ), new Vector3Int(0, globalY, 0), generate);
     }
 
-    public byte GetBlockType(Vector3Int LocalPosition, Vector3Int NoiseLocation, Vector3Int globalLocation, bool generate) {
+    public uint GetBlockType(Vector3Int LocalPosition, Vector3Int NoiseLocation, Vector3Int globalLocation, bool generate) {
         try {
             if (generate && !IsBlockSet(LocalPosition.x, LocalPosition.y, LocalPosition.z)) {
                 byte generatedBlock = GetBlockType(LocalPosition.x, LocalPosition.y, LocalPosition.z, NoiseLocation.x, NoiseLocation.y, NoiseLocation.z, globalLocation.y);
@@ -454,8 +454,8 @@ public class VoxelBuilder : IVoxelBuilder {
         return (int)rValue;
     }
 
-    private byte[] GetSurroundingBlocks(Vector3Int _noise, Vector3Int _global, Vector3Int _local, bool generate) {
-        byte[] surroundingBlocks = new byte[6];
+    private uint[] GetSurroundingBlocks(Vector3Int _noise, Vector3Int _global, Vector3Int _local, bool generate) {
+        uint[] surroundingBlocks = new uint[6];
 
         // Y+
         if (_local.y >= ChunkSizeY - 1)
@@ -573,7 +573,7 @@ public class VoxelBuilder : IVoxelBuilder {
         return surroundingBlocks;
     }
 
-    private void RenderSides(BlockType _type, byte[] _sides, Vector3Int _GlobalPosition, Vector3Int _localPosition, ref List<Vector3> _vertices, ref List<int> _triangles, ref List<Vector2> _uv, float _sideLength, int[] _textureIndex) {
+    private void RenderSides(BlockType _type, uint[] _sides, Vector3Int _GlobalPosition, Vector3Int _localPosition, ref List<Vector3> _vertices, ref List<int> _triangles, ref List<Vector2> _uv, float _sideLength, int[] _textureIndex) {
         if (_type.baseType == BaseType.solid) {
             int x = _localPosition.x;
             int y = _localPosition.y;

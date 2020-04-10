@@ -398,8 +398,8 @@ public class MarchingCubesTest : MonoBehaviour
         mesh.vertices = meshData.vertices;
         mesh.triangles = meshData.triangles;
         mesh.uv = meshData.UVs;
-        mesh.uv2 = meshData.UVs2;
-        mesh.uv3 = meshData.UVs3;
+        //mesh.uv2 = meshData.UVs2;
+        //mesh.uv3 = meshData.UVs3;
         mesh.RecalculateNormals();
 
         _filter.sharedMesh = mesh;
@@ -411,8 +411,8 @@ public class MarchingCubesTest : MonoBehaviour
         meshData.vertices = null;
         meshData.triangles = null;
         meshData.UVs = null;
-        meshData.UVs2 = null;
-        meshData.UVs3 = null;
+        //meshData.UVs2 = null;
+        //meshData.UVs3 = null;
     }
 
     public MeshData Render()
@@ -455,7 +455,7 @@ public class MarchingCubesTest : MonoBehaviour
                 }
         watch.Stop();
         timeStr = watch.Elapsed.ToString();
-        return new MeshData(vertices.ToArray(), triangles.ToArray(), UVs[0].ToArray(), UVs[1].ToArray(), UVs[2].ToArray());
+        return new MeshData(vertices.ToArray(), triangles.ToArray(), UVs[0].ToArray());
     }
 
     void Render(Vector4[] grid, float isoLevel, ref List<Vector3> vertices, ref List<int> triangles, ref List<Vector2>[] uv, int[] _textureIndex)

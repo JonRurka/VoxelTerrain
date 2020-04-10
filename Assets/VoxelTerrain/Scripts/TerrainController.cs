@@ -38,7 +38,7 @@ public class TerrainController : MonoBehaviour, IPageController
     public static Dictionary<byte, BlockType> blockTypes = new Dictionary<byte, BlockType>();
 
     // Temparary simple 3D array. Will use dictionary when I switch over to unlimited terrain gen.
-    public SafeDictionary<Vector3Int, Chunk> Chunks = new SafeDictionary<Vector3Int, Chunk>();
+    public SafeDictionary<Vector3Int, SmoothChunk> Chunks = new SafeDictionary<Vector3Int, SmoothChunk>();
 
     public SafeDictionary<Vector2Int, GameObject>  grassObj = new SafeDictionary<Vector2Int, GameObject>();
 
@@ -65,6 +65,14 @@ public class TerrainController : MonoBehaviour, IPageController
     private bool _running = true;
     private bool renderCompleteCalled = false;
 
+    public int NumSourceTextures { get; }
+
+    public Texture2DArray TextureArray { get; }
+
+    public GameObject ChunkPrefab { get; }
+
+    public BlockType[] BlockTypes { get; }
+
     void Awake()
     {
         Instance = this;
@@ -72,7 +80,7 @@ public class TerrainController : MonoBehaviour, IPageController
 
 	// Use this for initialization
 	void Start () {
-        float radius = VoxelSettings.radius * VoxelSettings.MeterSizeX;
+        float radius = SmoothVoxelSettings.radius * SmoothVoxelSettings.MeterSizeX;
         for (int i = 0; i < 10; i++) {
             Debug.Log((radius / 10) * i);
         }
@@ -94,7 +102,7 @@ public class TerrainController : MonoBehaviour, IPageController
                 _generateArroundChunk = _oldPlayerChunkPos = newPlayerChunkPos;
                 GenerateSpherical(newPlayerChunkPos);
             }
-            foreach(Chunk chk in Chunks.Values.ToArray()) 
+            foreach(SmoothChunk chk in Chunks.Values.ToArray()) 
                 chk.ChunkUpdate();
         }
     
@@ -207,10 +215,10 @@ public class TerrainController : MonoBehaviour, IPageController
         AddBlockType(BaseType.solid, "Rock", new int[] { 1, 1, 1, 1, 1, 1 }, null);
         AddBlockType(BaseType.solid, "Dirt", new int[] { 2, 2, 2, 2, 2, 2 }, null);
         AddBlockType(BaseType.solid, "Brick", new int[] { 3, 3, 3, 3, 3, 3 }, null);
-        if (VoxelSettings.randomSeed)
-            VoxelSettings.seed = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
+        if (SmoothVoxelSettings.randomSeed)
+            SmoothVoxelSettings.seed = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
         else
-            VoxelSettings.seed = seed;
+            SmoothVoxelSettings.seed = seed;
         //TestSmooth();
         //SpawnChunksLinear();
         //GameManager.Status = "Loading...";
@@ -219,23 +227,13 @@ public class TerrainController : MonoBehaviour, IPageController
         //TestSmooth();
     }
 
-    public void TestSmooth()
-    {
-        TerrainModule module = new TerrainModule(VoxelSettings.seed);
-        Vector3Int chunkPos = new Vector3Int(-1, 2, -1);
-        threadFinished = new bool[1];
-        SpawnChunk(new Vector3Int(0, 0, 0), module);
-        SpawnChunk(new Vector3Int(1, 0, 0), module, 1/3f);
-        //GenerateChunks("testGen", 0, Chunks.Values.ToArray());
-    }
-
     public void GenerateSpherical(Vector3Int center) {
         _resetEvent = new System.Threading.ManualResetEvent(false);
         LODtarget = center;
         //Loom.QueueAsyncTask("chunkUpdate", ChunkUpdate);
         Loom.QueueAsyncTask(WorldThreadName, () => {
-            TerrainModule module = new TerrainModule(VoxelSettings.seed);
-            for (int i = 0; i < VoxelSettings.radius; i++) {
+            TerrainModule module = new TerrainModule(SmoothVoxelSettings.seed);
+            for (int i = 0; i < SmoothVoxelSettings.radius; i++) {
                 Vector3Int[][] chunkBand = GetChunkLocationsAroundPoint(threads, i, center);
                 for (int threadIndex = 0; threadIndex < chunkBand.Length; threadIndex++) {
                     Vector3Int[] positions = chunkBand[threadIndex];
@@ -262,7 +260,7 @@ public class TerrainController : MonoBehaviour, IPageController
                     int x = (int)(center.x + radius * Mathf.Cos(angle * (Mathf.PI / 180)));
                     int z = (int)(center.z + radius * Mathf.Sin(angle * (Mathf.PI / 180)));
 
-                    for (int y = -VoxelSettings.maxChunksY/2; y < VoxelSettings.maxChunksY/2; y++) {
+                    for (int y = -SmoothVoxelSettings.maxChunksY/2; y < SmoothVoxelSettings.maxChunksY/2; y++) {
                         Vector3Int[] positions = new Vector3Int[] {
                         new Vector3Int(x, y, z),
                         new Vector3Int(x + 1, y, z),
@@ -323,63 +321,9 @@ public class TerrainController : MonoBehaviour, IPageController
         return result;
     }
 
-    public void SpawnDebugChunks()
-    {
-        SpawnChunkFeild();
-
-        Loom.QueueAsyncTask(WorldThreadName, () => 
-        {
-            /*Chunks[1, 0, 0].DebugFill(1);
-            SafeDebug.Log("Filling 1, 0.");
-            Chunks[1, 0, 0].Render(true);
-            SafeDebug.Log("Rendering 1, 0.");
-
-            Chunks[1, 1, 0].DebugFill(2);
-            Chunks[1, 1, 0].Render(true);
-            SafeDebug.Log("Rendering 1, 1.");
-
-            Chunks[2, 0, 0].DebugFill(3);
-            Chunks[2, 0, 0].Render(true);
-            SafeDebug.Log("Rendering 2, 0.");
-
-            Chunks[2, 1, 0].DebugFill(4);
-            Chunks[2, 1, 0].Render(true);
-            SafeDebug.Log("Rendering 2, 1.");
-
-            SafeDebug.Log("Finished Debug rendering.");*/
-        });
-
-    }
-
-    public void SpawnChunksLinear()
-    {
-        SpawnChunkFeild();
-        Loom.QueueAsyncTask(WorldThreadName, () =>
-        {
-            TerrainModule module = new TerrainModule(VoxelSettings.seed);
-            for (int x = 0; x < VoxelSettings.maxChunksX; x++)
-            {
-                for (int z = 0; z < VoxelSettings.maxChunksZ; z++)
-                {
-                    for (int y = 0; y <= VoxelSettings.maxChunksY; y++)
-                    {
-                        Vector3Int location3D = new Vector3Int(x, y, z);
-                        //GenerateChunk(location3D, module);
-                    }
-                }
-            }
-            SafeDebug.Log("Finished rendering.");
-            Loom.QueueOnMainThread(() =>
-            {
-                _generating = false;
-                OnRenderComplete();
-            });
-        });
-    }
-
     public void UpdateLOD() {
-        foreach (Chunk chk in Chunks.Values.ToArray()) {
-            chk.Generate();
+        foreach (SmoothChunk chk in Chunks.Values.ToArray()) {
+            //chk.Generate();
         }
     }
 
@@ -391,12 +335,12 @@ public class TerrainController : MonoBehaviour, IPageController
             try {
                 for (int i = 0; i < chunks.Length; i++) {
                     _generating = true;
-                    Chunk.CreateChunk(chunks[i], threadName, index, module, this);
+                    //SmoothChunk.CreateChunk(chunks[i], module, this); // TODO: use sampler
                     chunksGenerated++;
                 }
                 if (!renderCompleteCalled) {
                     for (int i = 0; i < chunks.Length; i++) {
-                        if (Vector3.Distance(new Vector3Int(), chunks[i]) > VoxelSettings.radius / 2) {
+                        if (Vector3.Distance(new Vector3Int(), chunks[i]) > SmoothVoxelSettings.radius / 2) {
                             renderCompleteCalled = true;
                             Loom.QueueOnMainThread(OnRenderComplete);
                         }
@@ -410,14 +354,14 @@ public class TerrainController : MonoBehaviour, IPageController
         });
     }
 
-    public void GenerateChunk(Chunk chunk)
+    public void GenerateChunk(SmoothChunk chunk)
     {
         try
         {
             if (chunk != null && !chunk.Generated)
             {
                 _generating = true;
-                chunk.Generate();
+                //chunk.Generate();
             }
         }
         catch (Exception e)
@@ -431,7 +375,7 @@ public class TerrainController : MonoBehaviour, IPageController
     {
         byte index = (byte)blockTypes.Count;
         blockTypes.Add(index, new BlockType(_baseType, index, _name, _textures, _prefab));
-        BlocksArray = GetBlockTypeArray(blockTypes.Values);
+        BlocksArray = blockTypes.Values.ToArray();//GetBlockTypeArray(blockTypes.Values);
     }
 
     public bool BuilderExists(int x, int y, int z)
@@ -475,15 +419,9 @@ public class TerrainController : MonoBehaviour, IPageController
         return result;
     }
 
-    public static BlockType[] GetBlockTypeArray(Dictionary<byte, BlockType>.ValueCollection collection)
+    public GameObject getGameObject()
     {
-        BlockType[] types = new BlockType[collection.Count];
-        int i = 0;
-        foreach (BlockType _type in collection)
-        {
-            types[i++] = _type;
-        }
-        return types;
+        return gameObject;
     }
 
     public Block GetBlock(Vector3Int location) {
@@ -493,7 +431,7 @@ public class TerrainController : MonoBehaviour, IPageController
     public Block GetBlock(int x, int y, int z)
     {
         Vector3Int chunk = VoxelConversions.VoxelToChunk(new Vector3Int(x, y, z));
-        Vector3Int localVoxel = VoxelConversions.GlobalVoxToLocalChunkVoxCoord(chunk, new Vector3Int(x, y, z));
+        Vector3Int localVoxel = VoxelConversions.GlobalToLocalChunkCoord(chunk, new Vector3Int(x, y, z));
         Block result = default(Block);
         if (BuilderExists(chunk.x, chunk.y, chunk.z)) {
             try {
@@ -508,21 +446,14 @@ public class TerrainController : MonoBehaviour, IPageController
         return result;
     }
 
-    /*public void SetSurfacePoints(Vector3Int[] points)
-    {
-        for (int i = 0; i < points.Length; i++)
-            if (!surfacePoints.Contains(points[i]))
-                surfacePoints.Add(points[i]);
-    }*/
-
     public void SetBlockAtLocation(Vector3 position, byte type)
     {
         Vector3Int voxelPos = VoxelConversions.WorldToVoxel(position);
         Vector3Int chunk = VoxelConversions.VoxelToChunk(voxelPos);
-        Vector3Int localVoxel = VoxelConversions.GlobalVoxToLocalChunkVoxCoord(chunk, voxelPos);
+        Vector3Int localVoxel = VoxelConversions.GlobalToLocalChunkCoord(chunk, voxelPos);
         if (BuilderExists(chunk.x, chunk.y, chunk.z))
         {
-            Chunks[new Vector3Int(chunk.x, chunk.y, chunk.z)].EditNextFrame(new Chunk.BlockChange[] { new Chunk.BlockChange(position, type) });
+            Chunks[new Vector3Int(chunk.x, chunk.y, chunk.z)].EditNextFrame(new SmoothChunk.BlockChange[] { new SmoothChunk.BlockChange(position, type) });
         }
     }
 
@@ -541,7 +472,7 @@ public class TerrainController : MonoBehaviour, IPageController
         Loom.AddAsyncThread("Explosion");
         Loom.QueueAsyncTask("Explosion", () =>
         {        
-            Dictionary<Vector3Int, List<Chunk.BlockChange>> changes = new Dictionary<Vector3Int, List<Chunk.BlockChange>>();
+            Dictionary<Vector3Int, List<SmoothChunk.BlockChange>> changes = new Dictionary<Vector3Int, List<SmoothChunk.BlockChange>>();
             Vector3Int voxelPos = VoxelConversions.WorldToVoxel(postion);
             for (int x = voxelPos.x - radius; x <= voxelPos.x + radius; x++)
                 for (int y = voxelPos.y - radius; y <= voxelPos.y + radius; y++)
@@ -552,8 +483,8 @@ public class TerrainController : MonoBehaviour, IPageController
                         if (IsInSphere(voxelPos, radius, voxel))
                         {
                             if (!changes.ContainsKey(chunk))
-                                changes.Add(chunk, new List<Chunk.BlockChange>());
-                            changes[chunk].Add(new Chunk.BlockChange(VoxelConversions.GlobalVoxToLocalChunkVoxCoord(chunk, voxel), 0));
+                                changes.Add(chunk, new List<SmoothChunk.BlockChange>());
+                            changes[chunk].Add(new SmoothChunk.BlockChange(VoxelConversions.GlobalToLocalChunkCoord(chunk, voxel), 0));
                             //ChangeBlock(new Chunk.BlockChange(voxel, 0));
                         }
                     }
@@ -574,9 +505,9 @@ public class TerrainController : MonoBehaviour, IPageController
     {
         Vector3 modifiedNormal = new Vector3();
         if (invertNormal)
-            modifiedNormal = -(normals * VoxelSettings.half);
+            modifiedNormal = -(normals * SmoothVoxelSettings.half);
         else
-            modifiedNormal = (normals * VoxelSettings.half);
+            modifiedNormal = (normals * SmoothVoxelSettings.half);
         ChangeBlock(globalPosition + modifiedNormal, type);
     }
 
@@ -589,19 +520,19 @@ public class TerrainController : MonoBehaviour, IPageController
 
     public void ChangeBlock(Vector3Int voxel, byte type)
     {
-        ChangeBlock(new Chunk.BlockChange(voxel, type));
+        ChangeBlock(new SmoothChunk.BlockChange(voxel, type));
     }
 
-    public void ChangeBlock(Chunk.BlockChange change)
+    public void ChangeBlock(SmoothChunk.BlockChange change)
     {
         Vector3Int chunk = VoxelConversions.VoxelToChunk(change.position);
-        Vector3Int localVoxel = VoxelConversions.GlobalVoxToLocalChunkVoxCoord(chunk, change.position);
+        Vector3Int localVoxel = VoxelConversions.GlobalToLocalChunkCoord(chunk, change.position);
         //Debug.LogFormat("voxel: {0}, localVoxel: {1}, chunk: {2}", voxel, localVoxel, chunk);
         if (BuilderExists(chunk.x, chunk.y, chunk.z))
         {
-            if (localVoxel.x >= 0 && localVoxel.x < VoxelSettings.ChunkSizeX && localVoxel.y >= 0 && localVoxel.y < VoxelSettings.ChunkSizeY && localVoxel.z >= 0 && localVoxel.z < VoxelSettings.ChunkSizeZ)
+            if (localVoxel.x >= 0 && localVoxel.x < SmoothVoxelSettings.ChunkSizeX && localVoxel.y >= 0 && localVoxel.y < SmoothVoxelSettings.ChunkSizeY && localVoxel.z >= 0 && localVoxel.z < SmoothVoxelSettings.ChunkSizeZ)
             {
-                Chunks[chunk].EditNextFrame(new Chunk.BlockChange(localVoxel, change.type));
+                Chunks[chunk].EditNextFrame(new SmoothChunk.BlockChange(localVoxel, change.type));
             }
             else
             {
@@ -611,12 +542,12 @@ public class TerrainController : MonoBehaviour, IPageController
         }
     }
 
-    public void ChangeBlock(Vector3Int chunk, Chunk.BlockChange change)
+    public void ChangeBlock(Vector3Int chunk, SmoothChunk.BlockChange change)
     {
         Vector3Int localVoxel = change.position;
         if (BuilderExists(chunk.x, chunk.y, chunk.z))
         {
-            if (localVoxel.x >= 0 && localVoxel.x < VoxelSettings.ChunkSizeX && localVoxel.y >= 0 && localVoxel.y < VoxelSettings.ChunkSizeY && localVoxel.z >= 0 && localVoxel.z < VoxelSettings.ChunkSizeZ)
+            if (localVoxel.x >= 0 && localVoxel.x < SmoothVoxelSettings.ChunkSizeX && localVoxel.y >= 0 && localVoxel.y < SmoothVoxelSettings.ChunkSizeY && localVoxel.z >= 0 && localVoxel.z < SmoothVoxelSettings.ChunkSizeZ)
             {
                 Chunks[chunk].EditNextFrame(change);
             }
@@ -628,7 +559,7 @@ public class TerrainController : MonoBehaviour, IPageController
         }
     }
 
-    public void ChangeBlock(Vector3Int chunk, Chunk.BlockChange[] changes)
+    public void ChangeBlock(Vector3Int chunk, SmoothChunk.BlockChange[] changes)
     {
         if (BuilderExists(chunk.x, chunk.y, chunk.z))
         {
@@ -641,13 +572,13 @@ public class TerrainController : MonoBehaviour, IPageController
         foreach(Vector3Int block in voxels)
         {
             Vector3Int chunk = VoxelConversions.VoxelToChunk(block);
-            Vector3Int localVoxel = VoxelConversions.GlobalVoxToLocalChunkVoxCoord(chunk, block);
+            Vector3Int localVoxel = VoxelConversions.GlobalToLocalChunkCoord(chunk, block);
             //Debug.LogFormat("voxel: {0}, localVoxel: {1}, chunk: {2}", voxel, localVoxel, chunk);
             if (BuilderExists(chunk.x, chunk.y, chunk.z))
             {
-                if (localVoxel.x >= 0 && localVoxel.x < VoxelSettings.ChunkSizeX && localVoxel.y >= 0 && localVoxel.y < VoxelSettings.ChunkSizeY && localVoxel.z >= 0 && localVoxel.z < VoxelSettings.ChunkSizeZ)
+                if (localVoxel.x >= 0 && localVoxel.x < SmoothVoxelSettings.ChunkSizeX && localVoxel.y >= 0 && localVoxel.y < SmoothVoxelSettings.ChunkSizeY && localVoxel.z >= 0 && localVoxel.z < SmoothVoxelSettings.ChunkSizeZ)
                 {
-                    Chunks[chunk].EditNextFrame(new Chunk.BlockChange(localVoxel, type));
+                    Chunks[chunk].EditNextFrame(new SmoothChunk.BlockChange(localVoxel, type));
                 }
                 else
                 {
@@ -682,7 +613,7 @@ public class TerrainController : MonoBehaviour, IPageController
     {
         try {
             if (BuilderExists(chunk.x, chunk.y, chunk.z)) {
-                Chunk chunkInst = Chunks[chunk];
+                SmoothChunk chunkInst = Chunks[chunk];
                 chunkInst.Close();
                 Chunks.Remove(chunk);
                 Loom.QueueOnMainThread(() => Destroy(chunkInst.gameObject));
@@ -693,40 +624,9 @@ public class TerrainController : MonoBehaviour, IPageController
         }
     }
 
-    private void SpawnChunkFeild()
-    {
-        for (int x = 0; x < VoxelSettings.maxChunksX; x++)
-        {
-            for (int z = 0; z < VoxelSettings.maxChunksZ; z++)
-            {
-                for (int y = 0; y <= VoxelSettings.maxChunksY; y++)
-                {
-                    SpawnChunk(new Vector3Int(x, y, z), new Perlin());
-                }
-            }
-        }
-    }
-
-    private void SpawnChunks(Vector3Int[] locations, IModule module, double voxelsPerMeter = VoxelSettings.voxelsPerMeter) {
-        foreach (Vector3Int chunkPos in locations)
-            SpawnChunk(chunkPos, module, voxelsPerMeter);
-    }
-
-    private void SpawnChunk(Vector3Int location, IModule module, double voxelsPerMeter = VoxelSettings.voxelsPerMeter)
-    {
-        if (!Chunks.ContainsKey(location))
-        {
-            Chunk chunk = Instantiate(chunkPrefab).GetComponent<Chunk>();
-            chunk.grassPrefab = grassPrefab;
-            chunk.name = string.Format("Chunk_{0}.{1}.{2}", location.x, location.y, location.z);
-            chunk.Init(location, module, this, voxelsPerMeter);
-            Chunks.Add(location, chunk);
-        }
-    }
-
-    public void AddChunk(Vector3Int pos, Chunk chunk) {
+    public void AddChunk(Vector3Int pos, IChunk chunk) {
         if (BuilderExists(pos.x, pos.y, pos.z)) {
-            Chunks.Add(pos, chunk);
+            Chunks.Add(pos, (SmoothChunk)chunk);
         }
     }
 
@@ -745,8 +645,8 @@ public class TerrainController : MonoBehaviour, IPageController
     private int ChunkSize()
     {
         int blockStructSize = 5; //Marshal.SizeOf(typeof(Block));
-        int blockArraySize = VoxelSettings.ChunkSizeX * VoxelSettings.ChunkSizeY * VoxelSettings.ChunkSizeZ * blockStructSize;
-        int heightMapArraySize = VoxelSettings.ChunkSizeX * VoxelSettings.ChunkSizeZ * sizeof(float);
+        int blockArraySize = SmoothVoxelSettings.ChunkSizeX * SmoothVoxelSettings.ChunkSizeY * SmoothVoxelSettings.ChunkSizeZ * blockStructSize;
+        int heightMapArraySize = SmoothVoxelSettings.ChunkSizeX * SmoothVoxelSettings.ChunkSizeZ * sizeof(float);
         return blockArraySize + heightMapArraySize;
     }
 

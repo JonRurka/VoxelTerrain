@@ -4,11 +4,12 @@ using System.Collections;
 using System.Runtime.InteropServices;
 
 [Serializable]
-public struct BlockType {
+public class BlockType {
     public BaseType baseType;
     public byte type;
     public string name;
     public int[] textureIndex;
+    public float[] ScaledIndex;
     GameObject prefab;
 
     public BlockType(BaseType _baseType, byte _type, string _name, int[] _index, GameObject _prefab) {
@@ -17,6 +18,7 @@ public struct BlockType {
         name = _name;
         textureIndex = _index;
         prefab = _prefab;
+        ScaledIndex = new float[_index.Length];
     }
     public override string ToString() {
         string UVs = string.Empty;
@@ -28,10 +30,18 @@ public struct BlockType {
         }
         return type.ToString() + "; " + baseType.ToString() + "; " + name + ", " + UVs;
     }
+    public void SetScaledIndices(int length)
+    {
+        for (int i = 0; i < textureIndex.Length; i++)
+        {
+            ScaledIndex[i] = VoxelConversions.Scale(textureIndex[i], 0, length, 0, 1);
+        }
+    }
 }
 
 public enum BaseType {
     air,
+    liquid,
     solid,
     prefab
 }
