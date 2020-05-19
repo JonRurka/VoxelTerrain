@@ -15,15 +15,17 @@ public class TerrainSampler : ISampler
     public float caveDensity;
     public float grassOffset;
 
-    public double[] SurfaceData;
+    public float[] SurfaceData;
+    public int[] pantMap;
+    public bool SurfaceSet = false;
 
     public double VoxelsPerMeter;
     public int ChunkSizeX;
     public int ChunkSizeY;
     public int ChunkSizeZ;
 
-    public float min;
-    public float max;
+    public float min = float.MaxValue;
+    public float max = float.MinValue;
 
     public TerrainSampler(IModule module, int _seed, bool _enableCaves, float _amp, float _caveDensity, float _grassOffset)
     {
@@ -42,18 +44,22 @@ public class TerrainSampler : ISampler
 
     public void SetChunkSettings(double voxelsPerMeter, Vector3Int chunkSizes, Vector3Int chunkMeterSize, int skipDist, float half, Vector3 sideLength)
     {
+        if (SurfaceSet)
+            return;
+
         VoxelsPerMeter = voxelsPerMeter;
         ChunkSizeX = chunkSizes.x;
         ChunkSizeY = chunkSizes.y;
         ChunkSizeZ = chunkSizes.z;
 
-        SurfaceData = new double[(ChunkSizeX + 2) * (ChunkSizeZ + 2)];
+        SurfaceData = new float[(ChunkSizeX + 2) * (ChunkSizeZ + 2)];
+        pantMap = new int[ChunkSizeX * ChunkSizeZ];
     }
 
     public double GetHeight(int x, int y)
     {
         if (NoiseModule != null)
-            return NoiseModule.GetValue((x * (.003 / VoxelsPerMeter)), 0, (y * (.003 / VoxelsPerMeter))) * VoxelsPerMeter - 10;
+            return NoiseModule.GetValue((x * (.003 / VoxelsPerMeter)), 0, (y * (.003 / VoxelsPerMeter))) * VoxelsPerMeter - 50;
         //else
         //    SafeDebug.LogError("NoiseModule null!");
         return 0;
@@ -110,7 +116,7 @@ public class TerrainSampler : ISampler
         return SurfaceData[(LocalX + 1) * (ChunkSizeZ + 2) + (LocalZ + 1)];
     }
 
-    public double Noise(IModule module, int x, int y, int z, double scale, double height, double power)
+    public double Noise(IModule module, float x, float y, float z, double scale, double height, double power)
     {
         double rValue = 0;
         if (module != null)
@@ -127,8 +133,11 @@ public class TerrainSampler : ISampler
         return rValue;
     }
 
-    public double[] SetSurfaceData(Vector2Int bottomLeft, Vector2Int topRight)
+    public float[] SetSurfaceData(Vector2Int bottomLeft, Vector2Int topRight)
     {
+        if (SurfaceSet)
+            return SurfaceData;
+
 
         for (int noiseX = bottomLeft.x - 1, x = 0; noiseX < topRight.x + 1; noiseX++, x++)
         {
@@ -137,10 +146,38 @@ public class TerrainSampler : ISampler
                 float val = (float)GetHeight(noiseX, noiseZ);
                 min = Mathf.Min(min, val);
                 max = Mathf.Max(max, val);
+                
+                if (x > 0 && z > 0 && x <= ChunkSizeX && z <= ChunkSizeZ)
+                {
+                    int type = 1;
+                    if (enableCaves)
+                    {
+                        float noiseVal = (float)Noise(caveModule, noiseX, val, noiseZ, 16.0,
+                            17.0, 1.0);
+                        if (noiseVal > caveDensity - 2)
+                        {
+                            type = 0;
+                            //val = val - noiseVal;
+                        }
+                    }
+
+                    pantMap[(x - 1) * (ChunkSizeZ) + (z - 1)] = type;
+                }
                 SurfaceData[x * (ChunkSizeZ + 2) + z] = val;
             }
         }
+        SurfaceSet = true;
         return SurfaceData;
+    }
+
+    public float[] GetSurfaceData()
+    {
+        return SurfaceData;
+    }
+
+    public int[] GetPlantMap()
+    {
+        return pantMap;
     }
 
     public double GetMin()

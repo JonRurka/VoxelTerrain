@@ -133,6 +133,9 @@ MonoBehaviour:
   globalPosition: {x: 0, y: 0, z: 0}
   builderInstance:
     blocks: []
+    blocks_set: 
+    blocks_type: 
+    blocks_is0: []
     SurfaceData: []
     BlockTypes: []
     AtlasUvs: []
@@ -165,6 +168,7 @@ MonoBehaviour:
     renderTime: 
     miscTime: 
     noiseRuns: 0
+    empty: 0
   editQueue: []
   grassPrefab: {fileID: 0}
   treePrefabs: []
@@ -179,3 +183,5 @@ MonoBehaviour:
   surface2D: []
   canUpdateForLOD: 0
   voxelsPerMeter: 1
+  type_data: []
+  Mat_index_array: []

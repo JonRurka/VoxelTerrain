@@ -73,6 +73,8 @@ public class TerrainController : MonoBehaviour, IPageController
 
     public BlockType[] BlockTypes { get; }
 
+    public ComputeBuffer TextureComputeBuffer => throw new NotImplementedException();
+
     void Awake()
     {
         Instance = this;

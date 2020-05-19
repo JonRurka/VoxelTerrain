@@ -11,7 +11,7 @@ public class SphereSampler : ISampler
     Vector3 Center;
     float Radius;
 
-    public double[] SurfaceData;
+    public float[] SurfaceData;
 
     public double VoxelsPerMeter;
     public int ChunkSizeZ;
@@ -99,7 +99,7 @@ public class SphereSampler : ISampler
         return SurfaceData[(LocalX + 1) * (ChunkSizeZ + 2) + (LocalZ + 1)];
     }
 
-    public double Noise(IModule module, int x, int y, int z, double scale, double height, double power)
+    public double Noise(IModule module, float x, float y, float z, double scale, double height, double power)
     {
         double rValue = 0;
         if (module != null)
@@ -116,7 +116,7 @@ public class SphereSampler : ISampler
         return rValue;
     }
 
-    public double[] SetSurfaceData(Vector2Int bottomLeft, Vector2Int topRight)
+    public float[] SetSurfaceData(Vector2Int bottomLeft, Vector2Int topRight)
     {
         for (int noiseX = bottomLeft.x - 1, x = 0; noiseX < topRight.x + 1; noiseX++, x++)
         {
@@ -125,6 +125,11 @@ public class SphereSampler : ISampler
                 SurfaceData[x * (ChunkSizeZ + 2) + z] = (float)GetHeight(noiseX, noiseZ);
             }
         }
+        return SurfaceData;
+    }
+
+    public float[] GetSurfaceData()
+    {
         return SurfaceData;
     }
 

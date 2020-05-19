@@ -8,9 +8,10 @@ using UnityEngine;
 public interface ISampler : System.IDisposable
 {
     void SetChunkSettings(double voxelsPerMeter, Vector3Int chunkSizes, Vector3Int chunkMeterSize, int skipDist, float half, Vector3 sideLength);
-    double Noise(IModule module, int x, int y, int z, double scale, double height, double power);
+    double Noise(IModule module, float x, float y, float z, double scale, double height, double power);
     double GetHeight(int x, int y);
-    double[] SetSurfaceData(Vector2Int bottomLeft, Vector2Int topRight);
+    float[] SetSurfaceData(Vector2Int bottomLeft, Vector2Int topRight);
+    float[] GetSurfaceData();
     double GetSurfaceHeight(int LocalX, int LocalZ);
     double GetMin();
     double GetMax();

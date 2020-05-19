@@ -14,6 +14,7 @@ public class SingleChunkController : MonoBehaviour, IPageController
     {
         Sphere,
         Terrain,
+        Flat
     }
 
     public GameObject chunkPrefab;
@@ -46,7 +47,7 @@ public class SingleChunkController : MonoBehaviour, IPageController
     // Start is called before the first frame update
     void Start()
     {
-        Debug.Log(System.Math.Round(0.014, 2, MidpointRounding.AwayFromZero) * 100);
+        Debug.Log(Mathf.Deg2Rad);
         Init();
     }
 
@@ -130,7 +131,7 @@ public class SingleChunkController : MonoBehaviour, IPageController
 
         //CreateSampler(Samplers.Sphere)
 
-        SmoothChunk.CreateChunk(new Vector3Int(0, 0, 0), CreateSampler(Samplers.Sphere), this);
+        SmoothChunk.CreateChunk(new Vector3Int(0, 0, 0), CreateSampler(Samplers.Terrain), this);
         //SmoothChunk.CreateChunk(new Vector3Int(1, 0, 0), CreateSampler(Samplers.Sphere), this);
 
     }
@@ -140,6 +141,10 @@ public class SingleChunkController : MonoBehaviour, IPageController
         ISampler result = null;
         switch(type)
         {
+            case Samplers.Flat:
+                result = new FlatSampler(1, 1);
+                break;
+
             case Samplers.Sphere:
                 result = new SphereSampler(new Vector3(SmoothVoxelSettings.MeterSizeX / 2f, SmoothVoxelSettings.MeterSizeY / 2f, SmoothVoxelSettings.MeterSizeZ / 2f),
                                                     SmoothVoxelSettings.MeterSizeX / 3f);
@@ -179,7 +184,8 @@ public class SingleChunkController : MonoBehaviour, IPageController
     {
         byte index = (byte)blockTypes_dict.Count;
         blockTypes_dict.Add(index, new BlockType(_baseType, index, _name, _textures, _prefab));
-        BlocksArray = blockTypes_dict.Values.ToArray();
+        InitBlockAccessOptimization();
+        //blockTypes = blockTypes_dict.Values.ToArray();
     }
 
     public void InitBlockAccessOptimization()

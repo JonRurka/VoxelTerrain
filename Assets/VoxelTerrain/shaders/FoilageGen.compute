@@ -1,0 +1,706 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+#pragma kernel CompileMesh
+
+#define QUATERNION_IDENTITY float4(0, 0, 0, 1)
+
+#ifndef PI
+#define PI 3.14159265359f
+#endif 
+
+#define Rad_2_Deg 57.29578
+#define Deg_2_Rad 0.01745329
+
+
+
+
+RWStructuredBuffer<float4> normals;
+
+
+
+uint sizeX;
+uint sizeZ;
+
+uint f_sizeX;
+uint f_sizeZ;
+
+uint voxel_offset_x;
+uint voxel_offset_z;
+
+uint perMeterX;
+uint perMeterZ;
+
+float average_height;
+
+float3 baseColor;
+float3 modColor1;
+
+struct VertexData {
+   float3 Vertex;
+   float2 UV;
+   float3 Normal;
+   float3 Color;
+};
+
+struct Quad {
+   float3 vertices_0;
+   float3 vertices_1;
+   float3 vertices_2;
+   float3 vertices_3;
+   float3 vertices_4;
+   float3 vertices_5;
+   float3 vertices_6;
+   float3 vertices_7;
+
+   int tris_0;
+   int tris_1;
+   int tris_2;
+   int tris_3;
+   int tris_4;
+   int tris_5;
+   int tris_6;
+   int tris_7;
+   int tris_8;
+   int tris_9;
+   int tris_10;
+   int tris_11;
+
+   float2 uv_0;
+   float2 uv_1;
+   float2 uv_2;
+   float2 uv_3;
+   float2 uv_4;
+   float2 uv_5;
+   float2 uv_6;
+   float2 uv_7;
+};
+
+struct Plant {
+   Quad q1;
+   Quad q2;
+   Quad q3;
+
+   int type;
+};
+
+StructuredBuffer<float> heightmap;
+StructuredBuffer<int> pantMap;
+RWStructuredBuffer<Plant> intermediate;
+
+RWStructuredBuffer<int> indices;
+RWStructuredBuffer<VertexData> vertex;
+
+// Hash function from H. Schechter & R. Bridson, goo.gl/RXiKaH
+uint Hash(uint s)
+{
+   s ^= 2747636419u;
+   s *= 2654435769u;
+   s ^= s >> 16;
+   s *= 2654435769u;
+   s ^= s >> 16;
+   s *= 2654435769u;
+   return s;
+}
+
+float Random(uint seed)
+{
+   return float(Hash(seed)) / 4294967295.0; // 2^32-1
+}
+
+// ######## Quaternion library ########
+
+float4 qmul(float4 q1, float4 q2)
+{
+   return float4(
+      q2.xyz * q1.w + q1.xyz * q2.w + cross(q1.xyz, q2.xyz),
+      q1.w * q2.w - dot(q1.xyz, q2.xyz)
+      );
+}
+
+float4 q_look_at(float3 forward, float3 up)
+{
+   forward = normalize(forward);
+   float3 right = normalize(cross(forward, up));
+   up = normalize(cross(forward, right));
+
+   float m00 = right.x;
+   float m01 = right.y;
+   float m02 = right.z;
+   float m10 = up.x;
+   float m11 = up.y;
+   float m12 = up.z;
+   float m20 = forward.x;
+   float m21 = forward.y;
+   float m22 = forward.z;
+
+   float num8 = (m00 + m11) + m22;
+   float4 q = QUATERNION_IDENTITY;
+   if (num8 > 0.0)
+   {
+      float num = sqrt(num8 + 1.0);
+      q.w = num * 0.5;
+      num = 0.5 / num;
+      q.x = (m12 - m21) * num;
+      q.y = (m20 - m02) * num;
+      q.z = (m01 - m10) * num;
+      return q;
+   }
+
+   if ((m00 >= m11) && (m00 >= m22))
+   {
+      float num7 = sqrt(((1.0 + m00) - m11) - m22);
+      float num4 = 0.5 / num7;
+      q.x = 0.5 * num7;
+      q.y = (m01 + m10) * num4;
+      q.z = (m02 + m20) * num4;
+      q.w = (m12 - m21) * num4;
+      return q;
+   }
+
+   if (m11 > m22)
+   {
+      float num6 = sqrt(((1.0 + m11) - m00) - m22);
+      float num3 = 0.5 / num6;
+      q.x = (m10 + m01) * num3;
+      q.y = 0.5 * num6;
+      q.z = (m21 + m12) * num3;
+      q.w = (m20 - m02) * num3;
+      return q;
+   }
+
+   float num5 = sqrt(((1.0 + m22) - m00) - m11);
+   float num2 = 0.5 / num5;
+   q.x = (m20 + m02) * num2;
+   q.y = (m21 + m12) * num2;
+   q.z = 0.5 * num5;
+   q.w = (m01 - m10) * num2;
+   return q;
+}
+
+// just in case you need that function also
+float4 CreateFromAxisAngle(float3 axis, float angle)
+{
+   float halfAngle = angle * 0.5f;
+   float s = sin(halfAngle);
+   float4 q;
+   q.x = axis.x * s;
+   q.y = axis.y * s;
+   q.z = axis.z * s;
+   q.w = cos(halfAngle);
+   return q;
+}
+
+/// <summary>
+/// Evaluates a rotation needed to be applied to an object positioned at sourcePoint to face destPoint
+/// </summary>
+/// <param name="sourcePoint">Coordinates of source point</param>
+/// <param name="destPoint">Coordinates of destionation point</param>
+/// <returns></returns>
+float4 LookAt(float3 sourcePoint, float3 destPoint)
+{
+   float3 up = float3(0, 1, 0);
+
+   float3 forwardVector = normalize(destPoint - sourcePoint);
+
+   float dot1 = dot(float3(0, 0, 1), forwardVector);
+
+   if (abs(dot1 - (-1.0f)) < 0.000001f)
+   {
+      return float4(up.x, up.y, up.z, 3.1415926535897932f);
+   }
+   if (abs(dot1 - (1.0f)) < 0.000001f)
+   {
+      return QUATERNION_IDENTITY;
+   }
+
+   float rotAngle = acos(dot1);
+   float3 rotAxis = cross(float3(0, 0, 1), forwardVector);
+   rotAxis = normalize(rotAxis);
+   return CreateFromAxisAngle(rotAxis, rotAngle);
+}
+
+
+
+// A given angle of rotation about a given axis
+float4 rotate_angle_axis(float angle, float3 axis)
+{
+   float sn = sin(angle * 0.5);
+   float cs = cos(angle * 0.5);
+   return float4(axis * sn, cs);
+}
+
+float3 rotate_vector(float3 v, float4 r)
+{
+   float4 r_c = r * float4(-1, -1, -1, 1);
+   return qmul(r, qmul(float4(v, 0), r_c)).xyz;
+}
+
+float4x4 quaternion_to_matrix(float4 quat)
+{
+   float4x4 m = float4x4(float4(0, 0, 0, 0), float4(0, 0, 0, 0), float4(0, 0, 0, 0), float4(0, 0, 0, 0));
+
+   float x = quat.x, y = quat.y, z = quat.z, w = quat.w;
+   float x2 = x + x, y2 = y + y, z2 = z + z;
+   float xx = x * x2, xy = x * y2, xz = x * z2;
+   float yy = y * y2, yz = y * z2, zz = z * z2;
+   float wx = w * x2, wy = w * y2, wz = w * z2;
+
+   m[0][0] = 1.0 - (yy + zz);
+   m[0][1] = xy - wz;
+   m[0][2] = xz + wy;
+
+   m[1][0] = xy + wz;
+   m[1][1] = 1.0 - (xx + zz);
+   m[1][2] = yz - wx;
+
+   m[2][0] = xz - wy;
+   m[2][1] = yz + wx;
+   m[2][2] = 1.0 - (xx + yy);
+
+   m[3][3] = 1.0;
+
+   return m;
+}
+
+float3 MultiplyPoint(float3 p, float4x4 mat)
+{
+   float3 vector3;
+   vector3.x = mat[0][0] * p.x + mat[0][1] * p.y + mat[0][2] * p.z + mat[0][3];
+   vector3.y = mat[1][0] * p.x + mat[1][1] * p.y + mat[1][2] * p.z + mat[1][3];
+   vector3.z = mat[2][0] * p.x + mat[2][1] * p.y + mat[2][2] * p.z + mat[2][3];
+   float single = mat[3][0] * p.x + mat[3][1] * p.y + mat[3][2] * p.z + mat[3][3];
+   single = 1 / single;
+   vector3.x *= single;
+   vector3.y *= single;
+   vector3.z *= single;
+   return vector3;
+}
+
+// ######## End Quaternion library ########
+
+uint ToFlat_2D(int x, int z)
+{
+   return (x + 1) * (sizeZ + 2) + (z + 1);
+}
+
+float Bilinear(float Q11, float Q21, float Q12, float Q22, float x, float y)
+{
+   float x1 = 0;
+   float x2 = 1;
+   float y1 = 0;
+   float y2 = 1;
+
+   float R1 = ((x2 - x) / (x2 - x1))*Q11 + ((x - x1) / (x2 - x1))*Q21;
+   float R2 = ((x2 - x) / (x2 - x1))*Q12 + ((x - x1) / (x2 - x1))*Q22;
+
+   return ((y2 - y) / (y2 - y1))*R1 + ((y - y1) / (y2 - y1))*R2;
+}
+
+float3 GetPointNormal(int x, int z)
+{
+   float val = heightmap[ToFlat_2D(x, z)];
+
+   float nx = (val - heightmap[ToFlat_2D(x + 1, z)]) - (val - heightmap[ToFlat_2D(x - 1, z)]);
+   float ny = (val - heightmap[ToFlat_2D(x, z)] + 1) - (val - heightmap[ToFlat_2D(x, z)] - 1);
+   float nz = (val - heightmap[ToFlat_2D(x, z + 1)]) - (val - heightmap[ToFlat_2D(x, z - 1)]);
+
+   return normalize(float3(nx, ny, nz));
+}
+
+float sqrMagnitude(float3 p)
+{
+   return p.x * p.x + p.y * p.y + p.z * p.z;
+}
+
+float magnitude(float3 p)
+{
+   return sqrt(sqrMagnitude(p));
+}
+
+float Angle(float3 from, float3 to)
+{
+   float val1 = sqrt(sqrMagnitude(from) * sqrMagnitude(to));
+
+   if (val1 >= pow(1 * 10, -15))
+   {
+      float single2 = clamp(dot(from, to) / val1, -1, 1);
+      return acos(single2) * 57.29578;
+   }
+   else
+   {
+      return 0;
+   }
+}
+
+float3 GetTangent(float3 normal)
+{
+   float3 tangent;
+   float3 t1 = cross(normal, float3(0, 0, 1));
+   float3 t2 = cross(normal, float3(0, 1, 0));
+   if (magnitude(t1) > magnitude(t2))
+   {
+      tangent = t1;
+   }
+   else
+   {
+      tangent = t2;
+   }
+   return tangent;
+}
+
+float3 ToEuler(float3 dir, float3 up)
+{
+
+   float angle_H = atan2(dir.y, dir.x);
+
+   float angle_P = asin(dir.z);
+
+   float3 W0 = float3(-dir.y, dir.x, 0);
+   float3 U0 = W0 * dir;
+
+   float angle_B = atan(dot(W0, up) / dot(U0, up) / abs(W0) * abs(U0));
+
+
+
+   return float3(angle_P, 0, angle_B);
+}
+
+float hash(float n)
+{
+   return frac(sin(n)*43758.5453);
+}
+
+float noise(float3 x)
+{
+   // The noise function returns a value in the range -1.0f -> 1.0f
+
+   float3 p = floor(x);
+   float3 f = frac(x);
+
+   f = f * f*(3.0 - 2.0*f);
+   float n = p.x + p.y*57.0 + 113.0*p.z;
+
+   return lerp(lerp(lerp(hash(n + 0.0), hash(n + 1.0), f.x),
+      lerp(hash(n + 57.0), hash(n + 58.0), f.x), f.y),
+      lerp(lerp(hash(n + 113.0), hash(n + 114.0), f.x),
+         lerp(hash(n + 170.0), hash(n + 171.0), f.x), f.y), f.z);
+}
+
+Quad GetQuad(int num, float2 scale, float3 offset, float angle, float4 dir_quad)
+{
+   Quad quad;
+
+   float add = scale.x / 1;
+   float scal_x_half = scale.x / 2 + add;
+
+   //quad.vertices[4] = {
+   quad.vertices_0 = float3(-scal_x_half, 0, 0);
+   quad.vertices_1 = float3(scal_x_half, 0, 0);
+   quad.vertices_2 = float3(-scal_x_half, 0, scale.y);
+   quad.vertices_3 = float3(scal_x_half, 0, scale.y);
+   
+   //};
+
+   int tri_offset = num * 8;
+
+   //quad.tris = int[6]{
+   quad.tris_0 = tri_offset + 0;
+   quad.tris_1 = tri_offset + 1;
+   quad.tris_2 = tri_offset + 2;
+   quad.tris_3 = tri_offset + 2;
+   quad.tris_4 = tri_offset + 1;
+   quad.tris_5 = tri_offset + 3;
+
+   quad.tris_6 = tri_offset + 2;
+   quad.tris_7 = tri_offset + 1;
+   quad.tris_8 = tri_offset + 0;
+   quad.tris_9 = tri_offset + 3;
+   quad.tris_10 = tri_offset + 1;
+   quad.tris_11 = tri_offset + 2;
+   //};
+
+   //quad.uv = float2[4]{
+   quad.uv_0 = float2(0, 1);
+   quad.uv_1 = float2(1, 1);
+   quad.uv_2 = float2(0, 0);
+   quad.uv_3 = float2(1, 0);
+   quad.uv_4 = float2(0, 1);
+   quad.uv_5 = float2(1, 1);
+   quad.uv_6 = float2(0, 0);
+   quad.uv_7 = float2(1, 0);
+   //};
+
+   float4 quat = rotate_angle_axis(angle, float3(0, 0, 1));
+   float4x4 mat = quaternion_to_matrix(quat);
+
+   quad.vertices_0 = rotate_vector(quad.vertices_0, quat);
+   quad.vertices_1 = rotate_vector(quad.vertices_1, quat);
+   quad.vertices_2 = rotate_vector(quad.vertices_2, quat);
+   quad.vertices_3 = rotate_vector(quad.vertices_3, quat);
+
+   quad.vertices_0 = offset + rotate_vector(quad.vertices_0, dir_quad);
+   quad.vertices_1 = offset + rotate_vector(quad.vertices_1, dir_quad);
+   quad.vertices_2 = offset + rotate_vector(quad.vertices_2, dir_quad);
+   quad.vertices_3 = offset + rotate_vector(quad.vertices_3, dir_quad);
+
+   quad.vertices_4 = quad.vertices_0;
+   quad.vertices_5 = quad.vertices_1;
+   quad.vertices_6 = quad.vertices_2;
+   quad.vertices_7 = quad.vertices_3;
+
+   /*quad.vertices_0 = offset + MultiplyPoint(quad.vertices_0, mat);
+   quad.vertices_1 = offset + MultiplyPoint(quad.vertices_1, mat);
+   quad.vertices_2 = offset + MultiplyPoint(quad.vertices_2, mat);
+   quad.vertices_3 = offset + MultiplyPoint(quad.vertices_3, mat);*/
+
+   return quad;
+}
+
+
+[numthreads(1,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+    int originX = (int)(voxel_offset_x + id.x / perMeterX);
+    int originZ = (int)(voxel_offset_z + id.z / perMeterZ);
+
+    int l_x = id.x % perMeterX;
+    int l_z = id.z % perMeterZ;
+
+    float t_x = (float)l_x / perMeterX;
+    float t_y = (float)l_z / perMeterZ;
+
+    float corners[4] = {
+       heightmap[ToFlat_2D(originX, originZ)],
+       heightmap[ToFlat_2D(originX + 1, originZ)],
+       heightmap[ToFlat_2D(originX, originZ + 1)],
+       heightmap[ToFlat_2D(originX + 1, originZ + 1)]
+    };
+
+    float height = Bilinear(corners[0], corners[1], corners[2], corners[3], t_x, t_y);
+
+    float3 normal = GetPointNormal(originX, originZ);
+    //float3 tan = GetTangent(normal);
+
+    /*float3 corners_norm[4] = {
+       GetPointNormal(originX, originZ),
+       GetPointNormal(originX + 1, originZ),
+       GetPointNormal(originX, originZ + 1),
+       GetPointNormal(originX + 1, originZ + 1),
+    };*/
+
+    /*float3 normal = float3( 
+       Bilinear(corners_norm[0].x, corners_norm[1].x, corners_norm[2].x, corners_norm[3].x, t_x, t_y),
+       Bilinear(corners_norm[0].y, corners_norm[1].y, corners_norm[2].y, corners_norm[3].y, t_x, t_y), 
+       Bilinear(corners_norm[0].z, corners_norm[1].z, corners_norm[2].z, corners_norm[3].z, t_x, t_y)
+    );*/
+
+    //float3 euler = ToEuler(tan, float3(0, 1, 0));
+
+    //float4 output = float4(normal.x, normal.y, normal.z, height);
+
+    float scale_x = 1 / (float)perMeterX;
+    float plant_height = 0.5;
+
+    //float4 dirQuad = q_look_at(float3(0, 1, 0), float3(0, 1, 0));
+    float4 dirQuad = LookAt(float3(0, 0, 0), normal);
+
+    float r = Random(id.x + id.z * f_sizeX);
+    float rx = Random(id.x + id.z * f_sizeX + r * 100000);
+    float rz = Random(id.x + id.z * f_sizeX + rx * 100000);
+    float ry = Random(id.x + id.z * f_sizeX + rz * 100000);
+
+    float3 offset = float3(id.x / (float)perMeterX - f_sizeX / 2.0, height - average_height, id.z / (float)perMeterZ - f_sizeZ / 2.0);
+
+    offset.x += rx / 10;
+    offset.z += rz / 10;
+
+    plant_height += Random(id.x + id.z * f_sizeX + ry * 100000) / (float)5;
+
+    Plant plant;
+
+    plant.type = pantMap[originX * (sizeZ) + originZ];
+
+    plant.q1 = GetQuad(0, float2(scale_x, plant_height + ry / 10), offset, 0 * Deg_2_Rad + r, dirQuad);
+    plant.q2 = GetQuad(1, float2(scale_x, plant_height + ry / 10), offset, 45 * Deg_2_Rad + r, dirQuad);
+    plant.q3 = GetQuad(2, float2(scale_x, plant_height + ry / 10), offset, 90 * Deg_2_Rad + r, dirQuad);
+
+    intermediate[id.x * (f_sizeX * perMeterZ) + id.z] = plant;
+    //normals[id.x * (sizeZ * perMeterZ) + id.z] = output;
+}
+
+[numthreads(1, 1, 1)]
+void CompileMesh(uint3 id : SV_DispatchThreadID)
+{
+   int size = f_sizeX * perMeterX * f_sizeZ * perMeterZ;
+
+   int vert_offset = 0;
+   int index_offset = 0;
+   int uv_offset = 0;
+   int normal_offset = 0;
+   int color_offset = 0;
+
+   float col_scale = 1.5;
+
+   Plant plant;
+   Quad q;
+   for (int i = 0; i < size; i++)
+   {
+      plant = intermediate[i];
+
+      if (plant.type == 0)
+         continue;
+
+      // ##### Quad 1
+      q = plant.q1;
+
+      int ofst = vert_offset;
+
+      vertex[vert_offset++].Vertex = q.vertices_0;
+      vertex[vert_offset++].Vertex = q.vertices_1;
+      vertex[vert_offset++].Vertex = q.vertices_2;
+      vertex[vert_offset++].Vertex = q.vertices_3;
+      vertex[vert_offset++].Vertex = q.vertices_4;
+      vertex[vert_offset++].Vertex = q.vertices_5;
+      vertex[vert_offset++].Vertex = q.vertices_6;
+      vertex[vert_offset++].Vertex = q.vertices_7;
+      
+      /*indices[index_offset++] = ofst + q.tris_0;
+      indices[index_offset++] = ofst + q.tris_1;
+      indices[index_offset++] = ofst + q.tris_2;
+      indices[index_offset++] = ofst + q.tris_3;
+      indices[index_offset++] = ofst + q.tris_4;
+      indices[index_offset++] = ofst + q.tris_5;*/
+
+      vertex[uv_offset++].UV = q.uv_0;
+      vertex[uv_offset++].UV = q.uv_1;
+      vertex[uv_offset++].UV = q.uv_2;
+      vertex[uv_offset++].UV = q.uv_3;
+      vertex[uv_offset++].UV = q.uv_4;
+      vertex[uv_offset++].UV = q.uv_5;
+      vertex[uv_offset++].UV = q.uv_6;
+      vertex[uv_offset++].UV = q.uv_7;
+
+      float3 dir = cross(q.vertices_1 - q.vertices_0, q.vertices_2 - q.vertices_0);
+      float3 norm = normalize(dir);
+
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = -norm;
+      vertex[normal_offset++].Normal = -norm;
+      vertex[normal_offset++].Normal = -norm;
+      vertex[normal_offset++].Normal = -norm;
+
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+
+
+      // ##### Quad 2
+      q = plant.q2;
+
+      vertex[vert_offset++].Vertex = q.vertices_0;
+      vertex[vert_offset++].Vertex = q.vertices_1;
+      vertex[vert_offset++].Vertex = q.vertices_2;
+      vertex[vert_offset++].Vertex = q.vertices_3;
+      vertex[vert_offset++].Vertex = q.vertices_4;
+      vertex[vert_offset++].Vertex = q.vertices_5;
+      vertex[vert_offset++].Vertex = q.vertices_6;
+      vertex[vert_offset++].Vertex = q.vertices_7;
+
+      /*indices[index_offset++] = ofst + q.tris_0;
+      indices[index_offset++] = ofst + q.tris_1;
+      indices[index_offset++] = ofst + q.tris_2;
+      indices[index_offset++] = ofst + q.tris_3;
+      indices[index_offset++] = ofst + q.tris_4;
+      indices[index_offset++] = ofst + q.tris_5;*/
+
+      vertex[uv_offset++].UV = q.uv_0;
+      vertex[uv_offset++].UV = q.uv_1;
+      vertex[uv_offset++].UV = q.uv_2;
+      vertex[uv_offset++].UV = q.uv_3;
+      vertex[uv_offset++].UV = q.uv_4;
+      vertex[uv_offset++].UV = q.uv_5;
+      vertex[uv_offset++].UV = q.uv_6;
+      vertex[uv_offset++].UV = q.uv_7;
+
+      dir = cross(q.vertices_1 - q.vertices_0, q.vertices_2 - q.vertices_0);
+      norm = -normalize(dir);
+
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = -norm;
+      vertex[normal_offset++].Normal = -norm;
+      vertex[normal_offset++].Normal = -norm;
+      vertex[normal_offset++].Normal = -norm;
+
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+
+
+      // ##### Quad 3
+      q = plant.q3;
+
+      vertex[vert_offset++].Vertex = q.vertices_0;
+      vertex[vert_offset++].Vertex = q.vertices_1;
+      vertex[vert_offset++].Vertex = q.vertices_2;
+      vertex[vert_offset++].Vertex = q.vertices_3;
+      vertex[vert_offset++].Vertex = q.vertices_4;
+      vertex[vert_offset++].Vertex = q.vertices_5;
+      vertex[vert_offset++].Vertex = q.vertices_6;
+      vertex[vert_offset++].Vertex = q.vertices_7;
+
+      /*indices[index_offset++] = ofst + q.tris_0;
+      indices[index_offset++] = ofst + q.tris_1;
+      indices[index_offset++] = ofst + q.tris_2;
+      indices[index_offset++] = ofst + q.tris_3;
+      indices[index_offset++] = ofst + q.tris_4;
+      indices[index_offset++] = ofst + q.tris_5;*/
+
+      vertex[uv_offset++].UV = q.uv_0;
+      vertex[uv_offset++].UV = q.uv_1;
+      vertex[uv_offset++].UV = q.uv_2;
+      vertex[uv_offset++].UV = q.uv_3;
+      vertex[uv_offset++].UV = q.uv_4;
+      vertex[uv_offset++].UV = q.uv_5;
+      vertex[uv_offset++].UV = q.uv_6;
+      vertex[uv_offset++].UV = q.uv_7;
+
+      dir = cross(q.vertices_1 - q.vertices_0, q.vertices_2 - q.vertices_0);
+      norm = -normalize(dir);
+
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = norm;
+      vertex[normal_offset++].Normal = -norm;
+      vertex[normal_offset++].Normal = -norm;
+      vertex[normal_offset++].Normal = -norm;
+      vertex[normal_offset++].Normal = -norm;
+
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+      vertex[color_offset++].Color = baseColor + modColor1 * (Random(color_offset) / col_scale);
+   }
+}

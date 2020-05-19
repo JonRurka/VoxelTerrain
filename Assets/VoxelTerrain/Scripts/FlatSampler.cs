@@ -8,7 +8,9 @@ public class FlatSampler : ISampler
     public int Y;
     public uint Type;
 
-    public double[] SurfaceData;
+    public float[] SurfaceData;
+
+    public double VoxelsPerMeter;
 
     public int ChunkSizeZ;
 
@@ -20,18 +22,18 @@ public class FlatSampler : ISampler
 
     public double GetHeight(int x, int y)
     {
-        return y;
+        return Y;
     }
 
     public double GetIsoValue(Vector3Int LocalPosition, Vector3Int globalLocation, out uint type)
     {
-        double result = 1;
+        double result = -1;
         type = Type;
 
-        if (globalLocation.z < Y)
-        {
-            result = -1;
-        }
+        double surfaceHeight = GetSurfaceHeight(LocalPosition.x, LocalPosition.z);
+        result = surfaceHeight - (globalLocation.y * VoxelsPerMeter);
+
+        
 
 
         return result;
@@ -42,17 +44,20 @@ public class FlatSampler : ISampler
         return SurfaceData[(LocalX + 1) * (ChunkSizeZ + 2) + (LocalZ + 1)];
     }
 
-    public double Noise(IModule module, int x, int y, int z, double scale, double height, double power)
+    public double Noise(IModule module, float x, float y, float z, double scale, double height, double power)
     {
-        return y;
+        return Y;
     }
 
     public void SetChunkSettings(double voxelsPerMeter, Vector3Int chunkSizes, Vector3Int chunkMeterSize, int skipDist, float half, Vector3 sideLength)
     {
+        VoxelsPerMeter = voxelsPerMeter;
         ChunkSizeZ = chunkSizes.z;
+
+        SurfaceData = new float[(chunkSizes.x + 2) * (chunkSizes.z + 2)];
     }
 
-    public double[] SetSurfaceData(Vector2Int bottomLeft, Vector2Int topRight)
+    public float[] SetSurfaceData(Vector2Int bottomLeft, Vector2Int topRight)
     {
         for (int noiseX = bottomLeft.x - 1, x = 0; noiseX < topRight.x + 1; noiseX++, x++)
         {
@@ -64,6 +69,11 @@ public class FlatSampler : ISampler
         return SurfaceData;
     }
 
+    public float[] GetSurfaceData()
+    {
+        return SurfaceData;
+    }
+
     public void Dispose()
     {
         SurfaceData = null;
@@ -71,11 +81,11 @@ public class FlatSampler : ISampler
 
     public double GetMin()
     {
-        throw new System.NotImplementedException();
+        return Y;
     }
 
     public double GetMax()
     {
-        throw new System.NotImplementedException();
+        return Y;
     }
 }

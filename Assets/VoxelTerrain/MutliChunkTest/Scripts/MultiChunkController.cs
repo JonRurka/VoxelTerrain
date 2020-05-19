@@ -17,10 +17,13 @@ public class MultiChunkController : MonoBehaviour, IPageController
     public Texture2DArray textureArray;
     public Texture2D linearTextureBlending;
 
+
+
     public int width = 10;
     public int height = 5;
     public int depth = 10;
     public int chunksGenerated;
+    public float Ambience = 1;
 
     public int NumSourceTextures { get { return SourceTextures.Length; } }
     public Texture2DArray TextureArray { get { return textureArray; } }
@@ -29,12 +32,18 @@ public class MultiChunkController : MonoBehaviour, IPageController
     public Texture2D LinearTextureBlending { get { return linearTextureBlending; } }
     public ComputeBuffer TextureComputeBuffer { get; set; }
 
+    public static float T;
+
+    public GameObject ColumnObj;
+
     public static MultiChunkController Instance { get; private set; }
 
     public static Dictionary<byte, BlockType> blockTypes_dict = new Dictionary<byte, BlockType>();
     public static BlockType[] blockTypes;
 
+    public SafeDictionary<Vector2Int, ChunkColumn> Columns = new SafeDictionary<Vector2Int, ChunkColumn>();
     public SafeDictionary<Vector3Int, SmoothChunk> Chunks = new SafeDictionary<Vector3Int, SmoothChunk>();
+
 
     public delegate void GenerateComplete(Vector3Int[] chunks);
     public event GenerateComplete OnChunksGenerated;
@@ -50,18 +59,28 @@ public class MultiChunkController : MonoBehaviour, IPageController
     // Start is called before the first frame update
     void Start()
     {
-        SmoothVoxelSettings.seed = DateTime.Now.Millisecond;
+        Debug.Log(5 % 4);
+
+        //SmoothVoxelSettings.seed = DateTime.Now.Millisecond;
         Init();
     }
 
     // Update is called once per frame
     void Update()
     {
-        
+        RenderSettings.ambientIntensity = Ambience;
+        T += Time.deltaTime;
+        Shader.SetGlobalFloat("__Time", T);
     }
 
     public void Init()
     {
+        Stopwatch plant_cache_watch = new Stopwatch();
+        plant_cache_watch.Start();
+        PlantPolyCache.Init();
+        plant_cache_watch.Stop();
+        Debug.Log("Plant cache generated in: " + plant_cache_watch.Elapsed);
+
         GenTextureArray();
         AddBlockType(BaseType.air, "Air", new int[] { -1, -1, -1, -1, -1, -1 }, null);
         AddBlockType(BaseType.solid, "Grass", new int[] { 0, 0, 0, 0, 0, 0 }, null);
@@ -113,7 +132,8 @@ public class MultiChunkController : MonoBehaviour, IPageController
     {
         byte index = (byte)blockTypes_dict.Count;
         blockTypes_dict.Add(index, new BlockType(_baseType, index, _name, _textures, _prefab));
-        BlocksArray = blockTypes_dict.Values.ToArray();
+        InitBlockAccessOptimization();
+        //blockTypes = blockTypes_dict.Values.ToArray();
     }
 
     public void InitBlockAccessOptimization()
@@ -136,21 +156,44 @@ public class MultiChunkController : MonoBehaviour, IPageController
 
     public void GenerateChunks()
     {
-        List<Vector3Int> chunkCoords = new List<Vector3Int>();
+        Stopwatch watch = new Stopwatch();
+        watch.Start();
+        List<Vector2Int> colCoords = new List<Vector2Int>();
         for (int x = 0; x < width; x++)
         {
             for (int z = 0; z < depth; z++)
             {
-                for (int y = 0; y < height; y++)
+                Vector2Int col_pos = new Vector2Int(x, z);
+                if (!Columns.ContainsKey(col_pos))
                 {
-                    chunkCoords.Add(new Vector3Int(x, y, z));
+                    GameObject obj = Instantiate(ColumnObj, VoxelConversions.ChunkCoordToWorld(new Vector3Int(x, 0, z)), Quaternion.identity, transform);
+                    obj.name = "Column " + col_pos.ToString();
+                    Columns[col_pos] = obj.GetComponent<ChunkColumn>();
+                    Columns[col_pos].Init(col_pos, this, CreateTerrainSampler());
                 }
+                colCoords.Add(col_pos);
+
+                /*for (int y = 0; y < height; y++)
+                {
+                    Vector3Int pos = new Vector3Int(x, y, z);
+                    chunkCoords.Add(pos);
+
+                    Vector2Int col_pos = new Vector2Int(pos.x, pos.z);
+                    if (!Columns.ContainsKey(col_pos))
+                    {
+                        GameObject obj = new GameObject("Column " + col_pos.ToString(), typeof(ChunkColumn));
+                        Columns[col_pos] = obj.GetComponent<ChunkColumn>();
+                        Columns[col_pos].Init(20, col_pos, CreateTerrainSampler());
+                    }
+                }*/
             }
         }
-        GenerateChunks("Gen", chunkCoords.ToArray());
+        watch.Stop();
+        Debug.Log("Finished spawning columns: " + watch.Elapsed);
+        GenerateChunks("Gen", colCoords.ToArray());
     }
 
-    public void GenerateChunks(string threadName, Vector3Int[] chunks)
+    public void GenerateChunks(string threadName, Vector2Int[] columns)
     {
         Loom.QueueAsyncTask(threadName, () =>
         {
@@ -159,12 +202,11 @@ public class MultiChunkController : MonoBehaviour, IPageController
             {
                 Stopwatch watch = new Stopwatch();
                 watch.Start();
-                for (int i = 0; i < chunks.Length; i++)
+                for (int i = 0; i < columns.Length; i++)
                 {
                     _generating = true;
-
-                    SmoothChunk.CreateChunk(chunks[i], CreateTerrainSampler(), this); // TODO: use sampler
-                    chunksGenerated++;
+                    Columns[columns[i]].Generate(height);
+                    chunksGenerated+=height;
                 }
                 watch.Stop();
                 Debug.Log("Finished generating chunks in: " + watch.Elapsed);
@@ -172,9 +214,10 @@ public class MultiChunkController : MonoBehaviour, IPageController
                 if (!renderCompleteCalled)
                 {
                     renderCompleteCalled = true;
-                    if (OnChunksGenerated != null)
-                        Loom.QueueOnMainThread(() => { OnChunksGenerated(chunks); });
+                    //if (OnChunksGenerated != null)
+                    //    Loom.QueueOnMainThread(() => { OnChunksGenerated(columns); });
                 }
+                SpawnGrass();
                 _generating = false;
             }
             catch (Exception e)
@@ -182,6 +225,17 @@ public class MultiChunkController : MonoBehaviour, IPageController
                 SafeDebug.LogError(string.Format("{0}: {1}\n {2}", e.GetType().ToString(), e.Message, e.StackTrace));
             }
         });
+    }
+
+    public void SpawnGrass()
+    {
+        for (int x = 0; x < width; x++)
+        {
+            for (int z = 0; z < depth; z++)
+            {
+
+            }
+        }
     }
 
     public static ISampler CreateTerrainSampler()
@@ -198,8 +252,8 @@ public class MultiChunkController : MonoBehaviour, IPageController
 
     public void AddChunk(Vector3Int pos, IChunk chunk)
     {
+        Columns[new Vector2Int(pos.x, pos.z)].AddChunk(pos.y, chunk);
         Chunks[pos] = (SmoothChunk)chunk;
-
         Chunks[pos].BuildGPU_DataBuffer(true);
 
         Vector3Int[] dirs = new Vector3Int[]{
@@ -227,7 +281,11 @@ public class MultiChunkController : MonoBehaviour, IPageController
 
     public bool BuilderExists(int x, int y, int z)
     {
-        return Chunks.ContainsKey(new Vector3Int(x, y, z));
+        if (Chunks.ContainsKey(new Vector3Int(x, y, z)))
+        {
+            return Chunks[new Vector3Int(x, y, z)];
+        }
+        return false;
     }
 
     public bool BuilderGenerated(int x, int y, int z)
@@ -277,6 +335,4 @@ public class MultiChunkController : MonoBehaviour, IPageController
             Chunks[new Vector3Int(x, y, z)].Render(true);
         }
     }
-
-
 }

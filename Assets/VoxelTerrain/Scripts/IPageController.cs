@@ -6,6 +6,7 @@ public interface IPageController {
     Texture2DArray TextureArray { get; }
     GameObject ChunkPrefab { get; }
     BlockType[] BlockTypes { get; }
+    ComputeBuffer TextureComputeBuffer { get; }
 
     GameObject getGameObject();
     bool BuilderExists(int x, int y, int z);

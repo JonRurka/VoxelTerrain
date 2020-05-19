@@ -263,3 +263,93 @@ public struct GridPoint
         return new Vector3(input.x, input.y, input.z);
     }
 }
+
+[System.Serializable]
+[StructLayout(LayoutKind.Sequential)]
+public struct Quad
+{
+    public Vector3 vertices_0;
+    public Vector3 vertices_1;
+    public Vector3 vertices_2;
+    public Vector3 vertices_3;
+    public Vector3 vertices_4;
+    public Vector3 vertices_5;
+    public Vector3 vertices_6;
+    public Vector3 vertices_7;
+
+    public int tris_0;
+    public int tris_1;
+    public int tris_2;
+    public int tris_3;
+    public int tris_4;
+    public int tris_5;
+    public int tris_6;
+    public int tris_7;
+    public int tris_8;
+    public int tris_9;
+    public int tris_10;
+    public int tris_11;
+
+    public Vector2 uv_0;
+    public Vector2 uv_1;
+    public Vector2 uv_2;
+    public Vector2 uv_3;
+    public Vector2 uv_4;
+    public Vector2 uv_5;
+    public Vector2 uv_6;
+    public Vector2 uv_7;
+
+    public static int GetSize()
+    {
+        return (sizeof(float) * 3 * 8) + (sizeof(int) * 12) + (sizeof(float) * 2 * 8);
+    }
+
+    public Vector3[] GetVerts()
+    {
+        return new Vector3[] { vertices_0, vertices_1, vertices_2, vertices_3,
+            vertices_4, vertices_5, vertices_6, vertices_7};
+    }
+
+    public int[] GetTris(int offset)
+    {
+        return new int[] { offset + tris_0, offset + tris_1, offset + tris_2, offset + tris_3, offset + tris_4, offset + tris_5,
+             offset + tris_6, offset + tris_7, offset + tris_8, offset + tris_9, offset + tris_10, offset + tris_11};
+    }
+
+    public Vector2[] GetUVs()
+    {
+        return new Vector2[] { uv_0, uv_1, uv_2, uv_3,
+            uv_4, uv_5, uv_6, uv_7};
+    }
+};
+
+[System.Serializable]
+[StructLayout(LayoutKind.Sequential)]
+public struct Plant
+{
+    public Quad q1;
+    public Quad q2;
+    public Quad q3;
+
+    public int type;
+
+    public static int GetSize()
+    {
+        return Quad.GetSize() * 3 + sizeof(int);
+    }
+};
+
+[System.Serializable]
+[StructLayout(LayoutKind.Sequential)]
+public struct VertexData
+{
+    public Vector3 Vertex;
+    public Vector2 UV;
+    public Vector3 Normal;
+    public Vector3 Color;
+
+    public static int GetSize()
+    {
+        return sizeof(float) * 3 + sizeof(float) * 2 + sizeof(float) * 3 + sizeof(float) * 3;
+    }
+};

@@ -6,6 +6,9 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using LibNoise;
 
+using UnityEngine.Rendering;
+using Unity.Collections;
+
 public class SmoothChunk : MonoBehaviour, IChunk
 {
     [Serializable]
@@ -408,6 +411,14 @@ public class SmoothChunk : MonoBehaviour, IChunk
         }
     }
 
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    struct ExampleVertex
+    {
+        public Vector3 pos;
+        public ushort normalX, normalY;
+        public Color32 tangent;
+    }
+
     public void Render(bool renderOnly) {
         if (builder != null && !_destroyed) {
             Render(builder.Render(renderOnly));
@@ -432,23 +443,38 @@ public class SmoothChunk : MonoBehaviour, IChunk
                     mesh.triangles = meshData.triangles;
                     mesh.normals = smoothNormals;
 
+                    //IntPtr ptr = mesh.GetNativeVertexBufferPtr();
+
+                    //GraphicsBuffer buff = new GraphicsBuffer(GraphicsBuffer.Target.Vertex, 0, 0);
+                    //ComputeShader shader = null;
+
+                    
+                    
+                   //Graphics.DrawProcedural()
+
+                    //mesh.SetIndexBufferData
+
+
+
                     //mesh.colors = meshData.Colors;
                     //mesh.uv = meshData.UVs;
                     if (firstRun)
                     {
                         
+                        //FoliageTest test = gameObject.GetComponentInChildren<FoliageTest>();
+                        //test.TestComputeShader(transform.position, builderInstance.Sampler.GetSurfaceData());
 
                         //if (out_buff == null)
                         //    out_buff = new ComputeBuffer(1, sizeof(int), ComputeBufferType.Default);
 
                         //_renderer.material.SetTexture("_MainTex", SingleChunkController.Instance.LinearTextureBlending);
 
-                        _renderer.material.SetBuffer("_textureMap", MultiChunkController.Instance.TextureComputeBuffer);
-                        _renderer.material.SetTexture("_Textures", MultiChunkController.Instance.TextureArray);
+                        _renderer.material.SetBuffer("_textureMap", pageController.TextureComputeBuffer);
+                        _renderer.material.SetTexture("_Textures", pageController.TextureArray);
                         _renderer.material.SetVector("_chunk", new Vector4(chunkPosition.x, chunkPosition.y, chunkPosition.z));
                         _renderer.material.SetVector("_Dimensions", new Vector4(builderInstance.ChunkSizeX, builderInstance.ChunkSizeY, builderInstance.ChunkSizeZ));
                         _renderer.material.SetFloat("_voxelsPerMeter", (float)builderInstance.VoxelsPerMeter);
-                        _renderer.material.SetFloat("_NumTextures", MultiChunkController.Instance.NumSourceTextures);
+                        _renderer.material.SetFloat("_NumTextures", pageController.NumSourceTextures);
                     }
 
                     
@@ -520,7 +546,7 @@ public class SmoothChunk : MonoBehaviour, IChunk
         double voxelsPerMeter = SmoothVoxelSettings.voxelsPerMeter;
 
         SmoothVoxelBuilder builder = new SmoothVoxelBuilder(controller, chunkPos);
-        builder.SetBlockTypes(MultiChunkController.Instance.BlocksArray, null);
+        builder.SetBlockTypes(controller.BlockTypes, null);
         builder.CalculateVariables(voxelsPerMeter, SmoothVoxelSettings.MeterSizeX, SmoothVoxelSettings.MeterSizeY, SmoothVoxelSettings.MeterSizeZ);
         builder.Generate(sampler);
 
@@ -534,7 +560,7 @@ public class SmoothChunk : MonoBehaviour, IChunk
             chunk.name = string.Format("Chunk_{0}.{1}.{2}", chunkPos.x, chunkPos.y, chunkPos.z);
             chunk.Init(chunkPos, worldPos, null, controller, 1, builder);
             chunk.Render(meshData, true);
-            controller.AddChunk(chunkPos, chunk);
+            Loom.QueueAsyncTask("gen2", () => controller.AddChunk(chunkPos, chunk));
 
             /*if (!TerrainController.Instance.Chunks.ContainsKey(chunkPos))
             {
