@@ -8,16 +8,44 @@ namespace LibNoise
 {
     public class TerrainModule : IModule
     {
-        private IModule _module;
+        private RidgedMultifractal mountains;
+        private ScaleInput inputScaledMountains;
+        private ScaleBiasOutput scaleMountain;
+        private ScaleOutput scaleSelector;
+
+        private BiasOutput _module;
         private int _seed;
 
         public TerrainModule(int seed)
         {
             _seed = seed;
 
-            RidgedMultifractal mountains = new RidgedMultifractal();
+            Perlin perlin_mountains = new Perlin();
+            perlin_mountains.Seed = seed;
+            perlin_mountains.Frequency = 0.5;
+
+            ScaleBiasOutput scalePerlinMountain = new ScaleBiasOutput(perlin_mountains);
+            scalePerlinMountain.Scale = 1;
+
+
+
+            mountains = new RidgedMultifractal();
             mountains.Seed = seed;
             mountains.Frequency = 0.5;
+            mountains.Lacunarity = 2;
+            mountains.NoiseQuality = NoiseQuality.High;
+
+            
+
+            scaleMountain = new ScaleBiasOutput(mountains);
+            scaleMountain.Scale = 0.5;
+
+            Add blendMountains = new Add(scalePerlinMountain, scaleMountain);
+
+            double scale = 2;
+            inputScaledMountains = new ScaleInput(blendMountains, scale, 1, scale);
+
+
 
             Billow hills = new Billow();
             hills.Seed = seed;
@@ -27,20 +55,18 @@ namespace LibNoise
             scaleHill.Scale = 0.04;
             scaleHill.Bias = 0;
 
-            ScaleBiasOutput scaleMountain = new ScaleBiasOutput(mountains);
-            scaleMountain.Scale = 1.5;
+            
 
-            Perlin selectorControl = new Perlin();
-            selectorControl.Seed = seed;
-            selectorControl.Frequency = 0.10;
-            selectorControl.Persistence = 0.25;
+            //Perlin selectorControl = new Perlin();
+            //selectorControl.Seed = seed;
+            //selectorControl.Frequency = 0.10;
+            //selectorControl.Persistence = 0.25;
 
-            Select selector = new Select(selectorControl, scaleMountain, scaleHill);
-            selector.SetBounds(0, 1000);
-            selector.EdgeFalloff = 0.5;
-            _module = selector;
+            //Select selector = new Select(selectorControl, scaleMountain, scaleHill);
+            //selector.SetBounds(0, 1000);
+            //selector.EdgeFalloff = 0.5;
 
-            ScaleOutput scaleSelector = new ScaleOutput(selector, SmoothVoxelSettings.amplitude);
+            scaleSelector = new ScaleOutput(inputScaledMountains, SmoothVoxelSettings.amplitude);
             _module = new BiasOutput(scaleSelector, SmoothVoxelSettings.groundOffset);
         }
 

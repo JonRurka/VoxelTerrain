@@ -360,7 +360,7 @@ public class SmoothChunk : MonoBehaviour, IChunk
                             }
                         }
 
-                        buffer[x + (builderInstance.ChunkSizeY + 2) * (y + (builderInstance.ChunkSizeZ + 2) * z)] = block.type;
+                        buffer[x + (builderInstance.ChunkSizeX + 2) * (y + (builderInstance.ChunkSizeY + 2) * z)] = block.type;
                     }
                 }
             }
@@ -374,10 +374,11 @@ public class SmoothChunk : MonoBehaviour, IChunk
 
         Loom.QueueOnMainThread(() =>
         {
-            if (data_buffer == null)
-                data_buffer = new ComputeBuffer(buffer.Length, sizeof(uint), ComputeBufferType.Default);
-            data_buffer.SetData(buffer);
-            _renderer.material.SetBuffer("_Data", data_buffer);
+            //data_buffer = new ComputeBuffer(buffer.Length, sizeof(uint), ComputeBufferType.Default);
+            //data_buffer.SetData(buffer);
+            //_renderer.material.SetBuffer("_Data", data_buffer);
+            //_renderer.material.SetInt("_DataPadding", 2);
+            
         });
 
         watch.Stop();
@@ -429,6 +430,7 @@ public class SmoothChunk : MonoBehaviour, IChunk
         if (!_destroyed) {
 
             Vector3[] smoothNormals = builderInstance.GetSmoothNormals(meshData.normals);
+            //Vector3[] smoothNormals = meshData.normals;
             Loom.QueueOnMainThread(() => {
                 if (_filter != null && _collider != null && _renderer != null && !_destroyed) {
                     _rendered = true;
@@ -470,11 +472,17 @@ public class SmoothChunk : MonoBehaviour, IChunk
                         //_renderer.material.SetTexture("_MainTex", SingleChunkController.Instance.LinearTextureBlending);
 
                         _renderer.material.SetBuffer("_textureMap", pageController.TextureComputeBuffer);
+                        _renderer.material.SetBuffer("_typeColor", ((MultiChunkController)pageController).TypeColorsComputeBuffer);
+
                         _renderer.material.SetTexture("_Textures", pageController.TextureArray);
                         _renderer.material.SetVector("_chunk", new Vector4(chunkPosition.x, chunkPosition.y, chunkPosition.z));
                         _renderer.material.SetVector("_Dimensions", new Vector4(builderInstance.ChunkSizeX, builderInstance.ChunkSizeY, builderInstance.ChunkSizeZ));
                         _renderer.material.SetFloat("_voxelsPerMeter", (float)builderInstance.VoxelsPerMeter);
                         _renderer.material.SetFloat("_NumTextures", pageController.NumSourceTextures);
+
+                        data_buffer = new ComputeBuffer(builderInstance.blocks_type.Length, sizeof(uint), ComputeBufferType.Default);
+                        data_buffer.SetData(builderInstance.blocks_type);
+                        _renderer.material.SetBuffer("_Data", data_buffer);
                     }
 
                     
@@ -550,8 +558,13 @@ public class SmoothChunk : MonoBehaviour, IChunk
         builder.CalculateVariables(voxelsPerMeter, SmoothVoxelSettings.MeterSizeX, SmoothVoxelSettings.MeterSizeY, SmoothVoxelSettings.MeterSizeZ);
         builder.Generate(sampler);
 
-
+        System.Diagnostics.Stopwatch watch = new System.Diagnostics.Stopwatch();
+        watch.Start();
+        
         MeshData meshData = builder.Render(false);
+
+        watch.Stop();
+        Debug.Log("Chunk Generated at " + watch.Elapsed);
         //if (meshData.vertices.Length == 0)
         //    return;
 

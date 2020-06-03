@@ -62,6 +62,8 @@ public class ChunkColumn : MonoBehaviour
         Controller = controller;
         Sampler = sampler;
 
+        
+
         vertBuff_size = f_sizeX * perMeterX * f_sizeZ * perMeterZ * 8 * 3;
 
         intermediate = new Plant[f_sizeX * perMeterX * f_sizeZ * perMeterZ];
@@ -98,7 +100,31 @@ public class ChunkColumn : MonoBehaviour
 
     public void Generate(int height)
     {
-        for (int y = 0; y < height; y++)
+        int chunkSizeX = SmoothVoxelSettings.ChunkSizeX;
+        int chunkSizeY = SmoothVoxelSettings.ChunkSizeY;
+        int chunkSizeZ = SmoothVoxelSettings.ChunkSizeZ;
+
+        int meterSizeX = SmoothVoxelSettings.MeterSizeX;
+        int meterSizeY = SmoothVoxelSettings.MeterSizeY;
+        int meterSizeZ = SmoothVoxelSettings.MeterSizeZ;
+
+        Sampler.SetChunkSettings(SmoothVoxelSettings.voxelsPerMeter,
+                               new Vector3Int(chunkSizeX, chunkSizeY, chunkSizeZ),
+                               new Vector3Int(meterSizeX, meterSizeY, meterSizeZ),
+                               Mathf.RoundToInt(1 / (float)SmoothVoxelSettings.voxelsPerMeter),
+                               ((1.0f / (float)SmoothVoxelSettings.voxelsPerMeter) / 2.0f),
+                               new Vector3(meterSizeX / (float)chunkSizeX, meterSizeY / (float)chunkSizeY, meterSizeZ / (float)chunkSizeZ));
+        Vector2Int bottomLeft = new Vector2(Location.x * chunkSizeX, Location.y * chunkSizeZ);
+        Vector2Int topRight = new Vector2(Location.x * chunkSizeX + chunkSizeX, Location.y * chunkSizeZ + chunkSizeZ);
+        Sampler.SetSurfaceData(bottomLeft, topRight);
+
+        Vector3Int topVoxel = VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMax(), 0));
+        Vector3Int bottomVoxel = VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMin(), 0));
+
+        int topChunk = VoxelConversions.VoxelToChunk(topVoxel).y;
+        int bottomChunk = VoxelConversions.VoxelToChunk(bottomVoxel).y;
+
+        for (int y = 0; y <= topChunk; y++)
         {
             SmoothChunk.CreateChunk(new Vector3Int(Location.x, y, Location.y), Sampler, Controller);
         }
@@ -131,18 +157,21 @@ public class ChunkColumn : MonoBehaviour
 
     public void SpawnGrass()
     {
-        height_buffer = new ComputeBuffer(Sampler.GetSurfaceData().Length, sizeof(float));
-        height_buffer.SetData(Sampler.GetSurfaceData());
+        if (SmoothVoxelSettings.enableGrass)
+        {
+            height_buffer = new ComputeBuffer(Sampler.GetSurfaceData().Length, sizeof(float));
+            height_buffer.SetData(Sampler.GetSurfaceData());
 
-        plantMap_buffer = new ComputeBuffer(((TerrainSampler)Sampler).GetPlantMap().Length, sizeof(int));
-        plantMap_buffer.SetData(((TerrainSampler)Sampler).GetPlantMap());
+            plantMap_buffer = new ComputeBuffer(((TerrainSampler)Sampler).GetPlantMap().Length, sizeof(int));
+            plantMap_buffer.SetData(((TerrainSampler)Sampler).GetPlantMap());
 
-        grassDump = ((TerrainSampler)Sampler).GetPlantMap();
+            grassDump = ((TerrainSampler)Sampler).GetPlantMap();
 
-        SpawnGrass(0, 0, vertex_buffers[0], grasses[0]);
-        SpawnGrass(0, 1, vertex_buffers[1], grasses[1]);
-        SpawnGrass(1, 0, vertex_buffers[2], grasses[2]);
-        SpawnGrass(1, 1, vertex_buffers[3], grasses[3]);
+            SpawnGrass(0, 0, vertex_buffers[0], grasses[0]);
+            SpawnGrass(0, 1, vertex_buffers[1], grasses[1]);
+            SpawnGrass(1, 0, vertex_buffers[2], grasses[2]);
+            SpawnGrass(1, 1, vertex_buffers[3], grasses[3]);
+        }
     }
 
     public void SpawnGrass(int sec_x, int sec_z, ComputeBuffer v_buff, GameObject grass_obj)

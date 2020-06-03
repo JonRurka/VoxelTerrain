@@ -22,7 +22,7 @@ RenderSettings:
   m_LinearFogEnd: 300
   m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
-  m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
+  m_AmbientGroundColor: {r: 0, g: 0, b: 0, a: 1}
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
@@ -32,7 +32,7 @@ RenderSettings:
   m_FlareFadeSpeed: 3
   m_HaloTexture: {fileID: 0}
   m_SpotCookie: {fileID: 10001, guid: 0000000000000000e000000000000000, type: 0}
-  m_DefaultReflectionMode: 0
+  m_DefaultReflectionMode: 1
   m_DefaultReflectionResolution: 128
   m_ReflectionBounces: 1
   m_ReflectionIntensity: 1
@@ -202,8 +202,8 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 302975658}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalRotation: {x: -0.32375187, y: 0.1607209, z: -0.056116194, w: -0.9307011}
+  m_LocalPosition: {x: 134.08322, y: 89.53007, z: 4.541031}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
@@ -227,7 +227,7 @@ MonoBehaviour:
     m_Bits: 0
   stopNaNPropagation: 1
   finalBlitToCameraTarget: 0
-  antialiasingMode: 2
+  antialiasingMode: 3
   temporalAntialiasing:
     jitterSpread: 0.75
     sharpness: 0.25
@@ -406,17 +406,41 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   chunkPrefab: {fileID: 181032, guid: 2f46cbe0462c7184d9414fb46bc6cd04, type: 3}
   BlocksArray: []
-  SourceTextures:
-  - {fileID: 2800000, guid: c6e0767b1f8c34890ac245217f4b9731, type: 3}
-  - {fileID: 2800000, guid: a611a1d272883a04c945080bb908e41b, type: 3}
-  - {fileID: 2800000, guid: 440eb36db91ca410f800ff3cfe43572f, type: 3}
+  SourceMaterials:
+  - Name: Grass
+    Type: 2
+    Color: {r: 0.676087, g: 1, b: 0, a: 0}
+    Textures:
+    - {fileID: 2800000, guid: c6e0767b1f8c34890ac245217f4b9731, type: 3}
+    - {fileID: 2800000, guid: 751f7142022be9e4098014b54ce40d00, type: 3}
+    - {fileID: 2800000, guid: d06ab8e5ee36dba4cbc27e56cb6ea08c, type: 3}
+    - {fileID: 2800000, guid: 6b7bec72f0c106c40993b5c570bcac0f, type: 3}
+  - Name: Dirt
+    Type: 2
+    Color: {r: 0.745283, g: 0.49304426, b: 0.080153026, a: 0}
+    Textures:
+    - {fileID: 2800000, guid: a611a1d272883a04c945080bb908e41b, type: 3}
+    - {fileID: 2800000, guid: 440eb36db91ca410f800ff3cfe43572f, type: 3}
+    - {fileID: 2800000, guid: b116ff349314efc41bc6fb0ac88c7a80, type: 3}
+    - {fileID: 2800000, guid: 5596997fc36cfe945bbb00987f6d5c34, type: 3}
+  - Name: Rock
+    Type: 2
+    Color: {r: 0.49056602, g: 0.4389225, b: 0.37208968, a: 0}
+    Textures:
+    - {fileID: 2800000, guid: 79d31b95bc72b854280c1886fa7be9c0, type: 3}
+    - {fileID: 2800000, guid: 6e74ccb4e658c7c46bcdc4fe2f78c434, type: 3}
+    - {fileID: 2800000, guid: dcea12a4f4828d84596df93b884e8200, type: 3}
+    - {fileID: 2800000, guid: 9de86be88c510374ebf53776e9dd6b6e, type: 3}
+  SourceTextures: []
   textureArray: {fileID: 0}
   linearTextureBlending: {fileID: 0}
-  width: 10
+  cores: 4
+  width: 1
   height: 5
-  depth: 10
+  depth: 1
   chunksGenerated: 0
   Ambience: 1
   ColumnObj: {fileID: 2175370895507810340, guid: 1a2b4436d019603488d9cd930b4ed344,
     type: 3}
   textureArr: 
+  colArr: []

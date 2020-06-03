@@ -10,12 +10,14 @@ public class BlockType {
     public string name;
     public int[] textureIndex;
     public float[] ScaledIndex;
+    public Color color;
     GameObject prefab;
 
-    public BlockType(BaseType _baseType, byte _type, string _name, int[] _index, GameObject _prefab) {
+    public BlockType(BaseType _baseType, byte _type, string _name, Color col, int[] _index, GameObject _prefab) {
         baseType = _baseType;
         type = _type;
         name = _name;
+        color = col;
         textureIndex = _index;
         prefab = _prefab;
         ScaledIndex = new float[_index.Length];

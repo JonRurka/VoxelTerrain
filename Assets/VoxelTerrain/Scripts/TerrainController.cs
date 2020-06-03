@@ -212,11 +212,11 @@ public class TerrainController : MonoBehaviour, IPageController
         Loom.AddAsyncThread(GrassThreadName);
         textureAtlas = new Texture2D(0, 0);
         //AtlasUvs = textureAtlas.PackTextures(AllCubeTextures, 1);
-        AddBlockType(BaseType.air, "Air", new int[] { -1, -1, -1, -1, -1, -1 }, null);
-        AddBlockType(BaseType.solid, "Grass", new int[] { 0, 0, 0, 0, 0, 0 }, null);
-        AddBlockType(BaseType.solid, "Rock", new int[] { 1, 1, 1, 1, 1, 1 }, null);
-        AddBlockType(BaseType.solid, "Dirt", new int[] { 2, 2, 2, 2, 2, 2 }, null);
-        AddBlockType(BaseType.solid, "Brick", new int[] { 3, 3, 3, 3, 3, 3 }, null);
+        AddBlockType(BaseType.air, "Air", new Color(), new int[] { -1, -1, -1, -1, -1, -1 }, null);
+        AddBlockType(BaseType.solid, "Grass", new Color(), new int[] { 0, 0, 0, 0, 0, 0 }, null);
+        AddBlockType(BaseType.solid, "Rock", new Color(), new int[] { 1, 1, 1, 1, 1, 1 }, null);
+        AddBlockType(BaseType.solid, "Dirt", new Color(), new int[] { 2, 2, 2, 2, 2, 2 }, null);
+        AddBlockType(BaseType.solid, "Brick", new Color(), new int[] { 3, 3, 3, 3, 3, 3 }, null);
         if (SmoothVoxelSettings.randomSeed)
             SmoothVoxelSettings.seed = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
         else
@@ -373,10 +373,10 @@ public class TerrainController : MonoBehaviour, IPageController
         }
     }
 
-    public void AddBlockType(BaseType _baseType, string _name, int[] _textures, GameObject _prefab)
+    public void AddBlockType(BaseType _baseType, string _name, Color col, int[] _textures, GameObject _prefab)
     {
         byte index = (byte)blockTypes.Count;
-        blockTypes.Add(index, new BlockType(_baseType, index, _name, _textures, _prefab));
+        blockTypes.Add(index, new BlockType(_baseType, index, _name, col, _textures, _prefab));
         BlocksArray = blockTypes.Values.ToArray();//GetBlockTypeArray(blockTypes.Values);
     }
 

@@ -45,14 +45,15 @@ public static class SmoothVoxelSettings {
     public const int radius = 30;
     public const bool randomSeed = false;
     public const bool enableCaves = true;
-    public const float caveDensity = 5;
+    public const bool enableGrass = false;
+    public const float caveDensity = 14;
     public const float amplitude = 250;
-    public const float groundOffset = 80;
+    public const float groundOffset = 180;
     public const float grassOffset = 4;
 
     public const double voxelsPerMeter = 1f;
     public const int MeterSizeX = 20;
-    public const int MeterSizeY = 20;
+    public const int MeterSizeY = 128;
     public const int MeterSizeZ = 20;
     public const int ChunkSizeX = (int)(MeterSizeX * voxelsPerMeter);
     public const int ChunkSizeY = (int)(MeterSizeY * voxelsPerMeter);
@@ -62,5 +63,8 @@ public static class SmoothVoxelSettings {
     public const int maxChunksX = 10;
     public const int maxChunksY = 16;
     public const int maxChunksZ = 10;
+
+    public const int ChunksPerRegionX = 10;
+    public const int ChunksPerRegionZ = 10;
 }
 

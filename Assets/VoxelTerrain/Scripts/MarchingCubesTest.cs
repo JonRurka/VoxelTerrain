@@ -376,7 +376,7 @@ public class MarchingCubesTest : MonoBehaviour
     public void AddBlockType(BaseType _baseType, string _name, int[] _textures, GameObject _prefab)
     {
         byte index = (byte)blockTypes.Count;
-        blockTypes.Add(index, new BlockType(_baseType, index, _name, _textures, _prefab));
+        blockTypes.Add(index, new BlockType(_baseType, index, _name, new Color(), _textures, _prefab));
         BlocksArray = GetBlockTypeArray(blockTypes.Values);
     }
 

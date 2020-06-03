@@ -10,14 +10,25 @@ using Debug = UnityEngine.Debug;
 
 public class MultiChunkController : MonoBehaviour, IPageController
 {
+    [Serializable]
+    public class VoxelMaterial
+    {
+        public string Name;
+        public BaseType Type;
+        public Color Color;
+        public Texture2D[] Textures;
+    }
+
     public GameObject chunkPrefab;
     public BlockType[] BlocksArray;
+
+    public VoxelMaterial[] SourceMaterials;
 
     public Texture2D[] SourceTextures;
     public Texture2DArray textureArray;
     public Texture2D linearTextureBlending;
 
-
+    public int cores = 1;
 
     public int width = 10;
     public int height = 5;
@@ -31,6 +42,8 @@ public class MultiChunkController : MonoBehaviour, IPageController
     public BlockType[] BlockTypes { get { return blockTypes; } }
     public Texture2D LinearTextureBlending { get { return linearTextureBlending; } }
     public ComputeBuffer TextureComputeBuffer { get; set; }
+
+    public ComputeBuffer TypeColorsComputeBuffer { get; set; }
 
     public static float T;
 
@@ -81,32 +94,55 @@ public class MultiChunkController : MonoBehaviour, IPageController
         plant_cache_watch.Stop();
         Debug.Log("Plant cache generated in: " + plant_cache_watch.Elapsed);
 
-        GenTextureArray();
-        AddBlockType(BaseType.air, "Air", new int[] { -1, -1, -1, -1, -1, -1 }, null);
-        AddBlockType(BaseType.solid, "Grass", new int[] { 0, 0, 0, 0, 0, 0 }, null);
-        AddBlockType(BaseType.solid, "Soil", new int[] { 1, 0, 0, 0, 0, 0 }, null);
-        AddBlockType(BaseType.solid, "MossyRock", new int[] { 2, 0, 0, 0, 0, 0 }, null);
+        
+        AddBlockType(BaseType.air, "Air", new Color(), new int[] { -1, -1, -1, -1, -1, -1 }, null);
+
+        List<Texture2D> s_tex = new List<Texture2D>();
+        for (int i = 0; i < SourceMaterials.Length; i++)
+        {
+            int[] _tex_inds = new int[6];
+            for (int j = 0; j < SourceMaterials[i].Textures.Length; j++)
+            {
+                s_tex.Add(SourceMaterials[i].Textures[j]);
+                _tex_inds[j] = s_tex.Count - 1;
+            }
+            AddBlockType(SourceMaterials[i].Type, SourceMaterials[i].Name, SourceMaterials[i].Color, _tex_inds, null);
+        }
+        SourceTextures = s_tex.ToArray();
+
+        //AddBlockType(BaseType.solid, "Grass", new int[] { 0, 0, 0, 0, 0, 0 }, null);
+        //AddBlockType(BaseType.solid, "Soil", new int[] { 1, 0, 0, 0, 0, 0 }, null);
+        //AddBlockType(BaseType.solid, "MossyRock", new int[] { 2, 0, 0, 0, 0, 0 }, null);
         //AddBlockType(BaseType.solid, "Sand", new int[] { 3, 0, 0, 0, 0, 0 }, null);
+
+        GenTextureArray();
+        
         InitBlockAccessOptimization();
         CreateTextureComputeBuffer();
 
-        GenerateChunks();
+        GenerateChunks(cores);
     }
 
     public int[] textureArr;
+    public Color[] colArr;
     public void CreateTextureComputeBuffer()
     {
         //textureArr = new int[] {  };
         textureArr = new int[blockTypes.Length * 6];
+        colArr = new Color[blockTypes.Length];
         for (int i = 0; i < blockTypes.Length; i++)
         {
+            colArr[i] = blockTypes[i].color;
             for (int j = 0; j < 6; j++)
             {
                 textureArr[i * 6 + j] = blockTypes[i].textureIndex[j];
             }
         }
 
-        Debug.Log(textureArr);
+        TypeColorsComputeBuffer = new ComputeBuffer(colArr.Length, sizeof(float) * 4);
+        TypeColorsComputeBuffer.SetData(colArr);
+
+        //Debug.Log(textureArr);
         TextureComputeBuffer = new ComputeBuffer(textureArr.Length, sizeof(int));
         TextureComputeBuffer.SetData(textureArr);
 
@@ -128,10 +164,10 @@ public class MultiChunkController : MonoBehaviour, IPageController
         textureArray.Apply();
     }
 
-    public void AddBlockType(BaseType _baseType, string _name, int[] _textures, GameObject _prefab)
+    public void AddBlockType(BaseType _baseType, string _name, Color col, int[] _textures, GameObject _prefab)
     {
         byte index = (byte)blockTypes_dict.Count;
-        blockTypes_dict.Add(index, new BlockType(_baseType, index, _name, _textures, _prefab));
+        blockTypes_dict.Add(index, new BlockType(_baseType, index, _name, col, _textures, _prefab));
         InitBlockAccessOptimization();
         //blockTypes = blockTypes_dict.Values.ToArray();
     }
@@ -154,11 +190,18 @@ public class MultiChunkController : MonoBehaviour, IPageController
         }
     }
 
-    public void GenerateChunks()
+    public void GenerateChunks(int threads)
     {
         Stopwatch watch = new Stopwatch();
         watch.Start();
-        List<Vector2Int> colCoords = new List<Vector2Int>();
+        List<Vector2Int>[] colCoords = new List<Vector2Int>[threads];
+
+        for (int t = 0; t < threads; t++)
+        {
+            colCoords[t] = new List<Vector2Int>();
+        }
+
+        int i = 0;
         for (int x = 0; x < width; x++)
         {
             for (int z = 0; z < depth; z++)
@@ -171,7 +214,9 @@ public class MultiChunkController : MonoBehaviour, IPageController
                     Columns[col_pos] = obj.GetComponent<ChunkColumn>();
                     Columns[col_pos].Init(col_pos, this, CreateTerrainSampler());
                 }
-                colCoords.Add(col_pos);
+
+                colCoords[i % colCoords.Length].Add(col_pos);
+                i++;
 
                 /*for (int y = 0; y < height; y++)
                 {
@@ -190,7 +235,11 @@ public class MultiChunkController : MonoBehaviour, IPageController
         }
         watch.Stop();
         Debug.Log("Finished spawning columns: " + watch.Elapsed);
-        GenerateChunks("Gen", colCoords.ToArray());
+        for (int t = 0; t < colCoords.Length; t++)
+        {
+            //Debug.Log(colCoords[t].Count);
+            GenerateChunks("Gen_" + t, colCoords[t].ToArray());
+        }
     }
 
     public void GenerateChunks(string threadName, Vector2Int[] columns)
@@ -217,7 +266,6 @@ public class MultiChunkController : MonoBehaviour, IPageController
                     //if (OnChunksGenerated != null)
                     //    Loom.QueueOnMainThread(() => { OnChunksGenerated(columns); });
                 }
-                SpawnGrass();
                 _generating = false;
             }
             catch (Exception e)
@@ -227,24 +275,13 @@ public class MultiChunkController : MonoBehaviour, IPageController
         });
     }
 
-    public void SpawnGrass()
-    {
-        for (int x = 0; x < width; x++)
-        {
-            for (int z = 0; z < depth; z++)
-            {
-
-            }
-        }
-    }
-
     public static ISampler CreateTerrainSampler()
     {
         TerrainModule module = new TerrainModule(SmoothVoxelSettings.seed);
         ISampler result = new TerrainSampler(module,
                                     SmoothVoxelSettings.seed,
                                     SmoothVoxelSettings.enableCaves,
-                                    SmoothVoxelSettings.amplitude,
+                                    1.5f,
                                     SmoothVoxelSettings.caveDensity,
                                     SmoothVoxelSettings.grassOffset);
         return result;

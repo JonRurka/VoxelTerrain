@@ -454,38 +454,44 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
             int globalLocZ = 0;
             //try
             //{
-                watch.Reset();
-                watch.Start();
-                for (globalLocX = xStart, x = 0; x < ChunkSizeX; globalLocX++, x++)
+            watch.Reset();
+            watch.Start();
+            //
+            for (globalLocY = yStart, y = 0; y < ChunkSizeY; globalLocY++, y++)
+            {
+                if (globalLocY < Sampler.GetMin() - 20 || globalLocY > Sampler.GetMax())
                 {
-                    for (globalLocZ = zStart, z = 0; z < ChunkSizeZ; globalLocZ++, z++)
-                    {
-                        for (globalLocY = yStart, y = 0; y < ChunkSizeY; globalLocY++, y++)
-                        {
-                            if (!deactivated)
-                            {
-                                
-                                Vector3 worldPos = new Vector3(x * xSideLength, y * ySideLength, z * zSideLength);
-                                Vector3Int globalPos = new Vector3Int(globalLocX * skipDist, globalLocY *skipDist, globalLocZ * skipDist);
-                                Vector3Int localPos = new Vector3Int(x, y, z);
-                                GridPoint[] grid = new GridPoint[8];
-                                //miscWatch.Start();
-                                for (int i = 0; i < grid.Length; i++)
-                                    grid[i] = GetVector4(worldPos + locOffset[i], localPos + directionOffsets[i], globalPos + globalOffsets[i], !renderOnly);
-                                //miscWatch.Stop();
+                    continue;
+                }
 
-                                RenderBlock(grid, 0, vertices, triangles, Normals, null);
-                            }
-                            else
-                                return new MeshData(vertices.ToArray(), triangles.ToArray(), null, Normals.ToArray());
+                for (globalLocZ = zStart, z = 0; z < ChunkSizeZ; globalLocZ++, z++)
+                {
+                    for (globalLocX = xStart, x = 0; x < ChunkSizeX; globalLocX++, x++)
+                    {
+                        if (deactivated)
+                        {
+                            break;
                         }
+
+                        Vector3 worldPos = new Vector3(x * xSideLength, y * ySideLength, z * zSideLength);
+                        Vector3Int globalPos = new Vector3Int(globalLocX * skipDist, globalLocY * skipDist, globalLocZ * skipDist);
+                        Vector3Int localPos = new Vector3Int(x, y, z);
+                        GridPoint[] grid = new GridPoint[8];
+                        //miscWatch.Start();
+                        for (int i = 0; i < grid.Length; i++)
+                            grid[i] = GetVector4(worldPos + locOffset[i], localPos + directionOffsets[i], globalPos + globalOffsets[i], !renderOnly);
+                        //miscWatch.Stop();
+
+                        RenderBlock(grid, 0, vertices, triangles, Normals, null);
+                        
                     }
                 }
-                ResetPageNeighbors();
+            }
+            ResetPageNeighbors();
                 watch.Stop();
                 renderTime = watch.Elapsed.ToString();
 
-                Debug.Log("Chunk generated in: " + renderTime);
+                //Debug.Log("Chunk generated in: " + renderTime);
 
                 miscTime = miscWatch.Elapsed.ToString();
                 miscTime = globalLocZ.ToString();
@@ -583,14 +589,15 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
     public void Generate(ISampler sampler)
     {
         Sampler = sampler;
-        Sampler.SetChunkSettings(VoxelsPerMeter,
+        /*Sampler.SetChunkSettings(VoxelsPerMeter,
                                        new Vector3Int(ChunkSizeX, ChunkSizeY, ChunkSizeZ),
                                        new Vector3Int(ChunkMeterSizeX, ChunkMeterSizeY, ChunkMeterSizeZ),
                                        skipDist,
                                        half, new Vector3(xSideLength, ySideLength, zSideLength));
         Vector2Int bottomLeft = new Vector2(location.x * ChunkSizeX, location.z * ChunkSizeZ);
         Vector2Int topRight = new Vector2(location.x * ChunkSizeX + ChunkSizeX, location.z * ChunkSizeZ + ChunkSizeZ);
-        Sampler.SetSurfaceData(bottomLeft, topRight);
+        Sampler.SetSurfaceData(bottomLeft, topRight);*/
+
         int bottom = VoxelConversions.ChunkToVoxel(location).y;
         empty = bottom > Sampler.GetMax();
     }
@@ -656,8 +663,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         //Vector3 origin = new Vector3(ChunkSizeX / 2, ChunkSizeY / 2, ChunkSizeX / 2);
         //return new Vector4(world.x, world.y, world.z, Vector3.Distance(origin, world));
         GridPoint result = default(GridPoint);
-        result.OriginLocal = local;
-        result.OriginGlobal = global;
+
         Vector3Int chunk = VoxelConversions.VoxelToChunk(global);
         uint type;
         if (generate)
@@ -668,8 +674,10 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
             }
             else
             {
+                result = new GridPoint(world.x, world.y, world.z, (float)Sampler.GetIsoValue(local, global, out type), type);
+
                 //result = new GridPoint(world.x, world.y, world.z, 100);
-                Vector3Int chunklocalVoxel = VoxelConversions.GlobalToLocalChunkCoord(chunk, global);
+                /*Vector3Int chunklocalVoxel = VoxelConversions.GlobalToLocalChunkCoord(chunk, global);
                 SmoothVoxelBuilder builder = (SmoothVoxelBuilder)controller.GetBuilder(chunk.x, chunk.y, chunk.z);
                 if (builder != null)
                 {
@@ -679,7 +687,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
                 {
                     //result = new GridPoint(world.x, world.y, world.z, (float)Sampler.GetIsoValue(chunklocalVoxel, global, out type), type);
                     result = new GridPoint(world.x, world.y, world.z, (float)Sampler.GetIsoValue(local, global, out type), type);
-                }
+                }*/
             }
         }
         else
@@ -704,6 +712,10 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
                 result = new GridPoint(world.x, world.y, world.z, (float)GetIsoValue(local, global, generate, out type), (byte)type);
             }
         }
+
+        result.OriginLocal = local;
+        result.OriginGlobal = global;
+
         return result;
     }
 
@@ -816,7 +828,10 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         /*}
         catch (Exception e)
         {
-            SafeDebug.LogError(string.Format("Message: {0}\nglobalX={1}, globalZ={2}\nGenerate: {3}", e.Message, globalLocation.x, globalLocation.z, generate.ToString()), e);
+            deactivated = true;
+            SafeDebug.LogError(string.Format("Message: {0}\n X={1}, Y={2}, Z={3}\nGenerate: {4}", e.Message, LocalPosition.x, LocalPosition.y, LocalPosition.z, generate.ToString()), e);
+            SafeDebug.LogError(string.Format("{0} / {1}", Get_Flat_Index(LocalPosition.x, LocalPosition.y, LocalPosition.z), blocks_set.Length));
+            type = 0;
             return 0;
         }*/
     }
@@ -836,7 +851,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         if (!deactivated)
             //if (IsInBounds(_x, _y, _z))
             //{
-            blocks_set[x + ChunkSizeY * (y + ChunkSizeZ * z)] = true;
+            blocks_set[Get_Flat_Index(x, y, z)] = true;
             //blocks[x + ChunkSizeY * (y + ChunkSizeZ * z)].set = true;
         /*}
         else
@@ -851,8 +866,9 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         {
             //if (IsInBounds(_x, _y, _z))
             //{
-            blocks_type[x + ChunkSizeY * (y + ChunkSizeZ * z)] = block.type;
-            blocks_is0[x + ChunkSizeY * (y + ChunkSizeZ * z)] = block.iso;
+            int index = Get_Flat_Index(x, y, z);
+            blocks_type[index] = block.type;
+            blocks_is0[index] = block.iso;
 
             //blocks[x + ChunkSizeY * (y + ChunkSizeZ * z)].type = block.type;
             //blocks[x + ChunkSizeY * (y + ChunkSizeZ * z)].iso = block.iso;
@@ -873,7 +889,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
             y = Mathf.Clamp(y, 0, ChunkSizeY);
             z = Mathf.Clamp(z, 0, ChunkSizeZ);
 
-            int index = x + ChunkSizeY * (y + ChunkSizeZ * z);
+            int index = Get_Flat_Index(x, y, z);
 
             Block res = new Block(blocks_type[index], blocks_is0[index]);
             res.set = blocks_set[index];
@@ -889,16 +905,16 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
 
     public int Get_Flat_Index(int x, int y, int z)
     {
-        return x + ChunkSizeY * (y + ChunkSizeZ * z);
+        return x + ChunkSizeX * (y + ChunkSizeY * z);
     }
 
-    public void SetValueValue(int x, int y, int z, float value)
+    public void SetBlockValue(int x, int y, int z, float value)
     {
         if (!deactivated)
         {
             //if (IsInBounds(_x, _y, _z))
             //{
-            blocks_is0[x + ChunkSizeY * (y + ChunkSizeZ * z)] = value;
+            blocks_is0[Get_Flat_Index(x, y, z)] = value;
             /*}
             else
             {
@@ -913,7 +929,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         {
             //if (IsInBounds(_x, _y, _z))
             //{
-            return blocks_is0[x + ChunkSizeY * (y + ChunkSizeZ * z)];
+            return blocks_is0[Get_Flat_Index(x, y, z)];
             /*}
             else
             {
@@ -928,7 +944,7 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         if (!deactivated)
             //if (IsInBounds(_x, _y, _z))
             //{
-            return blocks_set[x + ChunkSizeY * (y + ChunkSizeZ * z)];
+            return blocks_set[Get_Flat_Index(x, y, z)];
             //return blocks[x + ChunkSizeY * (y + ChunkSizeZ * z)].set;
         /*}
         else
@@ -1079,5 +1095,10 @@ public class SmoothVoxelBuilder : IVoxelBuilder {
         SurfaceData = new double[(sizeX + 2) * (sizeZ + 2)];
 
         GridNormals = new Vector3[sizeX, sizeY, sizeZ];
+
+        SafeDebug.Log("test index: " + Get_Flat_Index(0, 16, 15));
+        SafeDebug.Log("test index: " + (0 + 32 * (16 + 16 * 15)));
+        SafeDebug.Log(string.Format("{0}, {1}, {2},", ChunkSizeX, ChunkSizeY, ChunkSizeZ));
+        SafeDebug.Log(blocks_set.Length);
     }
 }

@@ -38,6 +38,8 @@ namespace LibNoise.Modifiers
             if (sourceModule == null)
                 throw new ArgumentNullException("A source module must be provided.");
 
+            SourceModule = sourceModule;
+
             X = x;
             Y = y;
             Z = z;

@@ -114,11 +114,11 @@ public class SingleChunkController : MonoBehaviour, IPageController
     {
         CreateTextureBlend();
         GenTextureArray();
-        AddBlockType(BaseType.air, "Air", new int[] { -1, -1, -1, -1, -1, -1 }, null);
-        AddBlockType(BaseType.solid, "Grass", new int[] { 0, 0, 0, 0, 0, 0 }, null);
-        AddBlockType(BaseType.solid, "Soil", new int[] { 1, 0, 0, 0, 0, 0 }, null);
-        AddBlockType(BaseType.solid, "MossyRock", new int[] { 2, 0, 0, 0, 0, 0 }, null);
-        AddBlockType(BaseType.solid, "Sand", new int[] { 3, 0, 0, 0, 0, 0 }, null);
+        AddBlockType(BaseType.air, "Air", new Color(), new int[] { -1, -1, -1, -1, -1, -1 }, null);
+        AddBlockType(BaseType.solid, "Grass", new Color(), new int[] { 0, 0, 0, 0, 0, 0 }, null);
+        AddBlockType(BaseType.solid, "Soil", new Color(), new int[] { 1, 0, 0, 0, 0, 0 }, null);
+        AddBlockType(BaseType.solid, "MossyRock", new Color(), new int[] { 2, 0, 0, 0, 0, 0 }, null);
+        AddBlockType(BaseType.solid, "Sand", new Color(), new int[] { 3, 0, 0, 0, 0, 0 }, null);
         InitBlockAccessOptimization();
         CreateTextureComputeBuffer();
 
@@ -180,10 +180,10 @@ public class SingleChunkController : MonoBehaviour, IPageController
         return result;
     }
 
-    public void AddBlockType(BaseType _baseType, string _name, int[] _textures, GameObject _prefab)
+    public void AddBlockType(BaseType _baseType, string _name, Color col, int[] _textures, GameObject _prefab)
     {
         byte index = (byte)blockTypes_dict.Count;
-        blockTypes_dict.Add(index, new BlockType(_baseType, index, _name, _textures, _prefab));
+        blockTypes_dict.Add(index, new BlockType(_baseType, index, _name, col, _textures, _prefab));
         InitBlockAccessOptimization();
         //blockTypes = blockTypes_dict.Values.ToArray();
     }

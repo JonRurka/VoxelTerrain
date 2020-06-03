@@ -36,9 +36,9 @@ public class TerrainSampler : ISampler
         caveDensity = _caveDensity;
         grassOffset = _grassOffset;
 
-        Perlin _caves = new Perlin();
+        RidgedMultifractal _caves = new RidgedMultifractal();
         _caves.Seed = _seed;
-        _caves.Frequency = 0.5;
+        _caves.Frequency = 0.3;
         caveModule = _caves;
     }
 
@@ -59,10 +59,21 @@ public class TerrainSampler : ISampler
     public double GetHeight(int x, int y)
     {
         if (NoiseModule != null)
-            return NoiseModule.GetValue((x * (.003 / VoxelsPerMeter)), 0, (y * (.003 / VoxelsPerMeter))) * VoxelsPerMeter - 50;
+            return NoiseModule.GetValue((x * (.003 / VoxelsPerMeter)), 0, (y * (.003 / VoxelsPerMeter))) * amp * VoxelsPerMeter - 60;
         //else
         //    SafeDebug.LogError("NoiseModule null!");
         return 0;
+    }
+
+    Vector3 GetPointNormal(int x, int z)
+    {
+        float val = (float)GetSurfaceHeight(x, z);
+
+        float nx = (val - (float)GetSurfaceHeight(x + 1, z)) - (val - (float)GetSurfaceHeight(x - 1, z));
+        float ny = (val - (float)GetSurfaceHeight(x, z) + 1) - (val - (float)GetSurfaceHeight(x, z) - 1);
+        float nz = (val - (float)GetSurfaceHeight(x, z + 1)) - (val - (float)GetSurfaceHeight(x, z - 1));
+
+        return new Vector3(nx, ny, nz).normalized;
     }
 
     public double GetIsoValue(Vector3Int LocalPosition, Vector3Int globalLocation, out uint type)
@@ -85,13 +96,31 @@ public class TerrainSampler : ISampler
                 type = 2;
             }
 
+            if (type == 1)
+            {
+                Vector3 norm = GetPointNormal(LocalPosition.x, LocalPosition.z);
+                //if (Vector3.Distance(globalLocation, new Vector3(globalLocation.x, (float)surfaceHeight, globalLocation.z)) < 1)
+                //    Debug.DrawRay(globalLocation, norm, Color.red, 100000);
+
+                if (Vector3.Angle(Vector3.up, norm) > 40f)
+                {
+                    type = 2; // dirt
+                }
+
+                if (Vector3.Angle(Vector3.up, norm) > 50f)
+                {
+                    type = 3; // rock
+                }
+                
+            }
+
             if (enableCaves)
             {
                 float noiseVal = (float)Noise(caveModule, globalLocation.x, globalLocation.y, globalLocation.z, 16.0,
                     17.0, 1.0);
                 if (noiseVal > caveDensity)
                 {
-                    result = result - noiseVal;
+                    result = Mathf.Clamp01((float)result) - noiseVal;
                     surface = false;
                 }
             }
@@ -113,6 +142,9 @@ public class TerrainSampler : ISampler
 
     public double GetSurfaceHeight(int LocalX, int LocalZ)
     {
+        LocalX = Mathf.Clamp(LocalX, -1, ChunkSizeX);
+        LocalZ = Mathf.Clamp(LocalZ, -1, ChunkSizeZ);
+
         return SurfaceData[(LocalX + 1) * (ChunkSizeZ + 2) + (LocalZ + 1)];
     }
 

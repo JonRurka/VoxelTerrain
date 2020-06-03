@@ -80,6 +80,10 @@ public struct Vector3Int : IEquatable<Vector3Int>
     public override string ToString() {
         return string.Format("({0}, {1}, {2})", x, y, z);
     }
+    public string File_String()
+    {
+        return string.Format("{0}_{1}_{2}", x, y, z);
+    }
     public bool Equals(Vector3Int other)
     {
         return (x == other.x && y == other.y && z == other.z);
@@ -146,6 +150,10 @@ public struct Vector2Int {
     public override string ToString() {
         return string.Format("({0}, {1})", x, y);
     }
+    public string File_String()
+    {
+        return string.Format("{0}_{1}", x, y);
+    }
 }
 
 [Serializable]
@@ -179,8 +187,8 @@ public struct MeshData {
     }
     public int GetSize()
     {
-        int vertSize = vertices.Length * 12;
-        int triSize = triangles.Length * 4;
+        int vertSize = vertices.Length * sizeof(float) * 3;
+        int triSize = triangles.Length * sizeof(int);
         int uvSize = 0;// UVs.Length * 8;
         return vertSize + triSize + uvSize;
     }
@@ -256,6 +264,17 @@ public struct GridPoint
         this.type = type;
         OriginLocal = new Vector3Int();
         OriginGlobal = new Vector3Int();
+    }
+
+    public GridPoint(Vector3Int local, Vector3Int global, float iso, uint type)
+    {
+        this.x = global.x;
+        this.y = global.y;
+        this.z = global.z;
+        this.iso = iso;
+        this.type = type;
+        OriginLocal = local;
+        OriginGlobal = global;
     }
 
     public static implicit operator Vector3(GridPoint input)
@@ -353,3 +372,125 @@ public struct VertexData
         return sizeof(float) * 3 + sizeof(float) * 2 + sizeof(float) * 3 + sizeof(float) * 3;
     }
 };
+
+[StructLayout(LayoutKind.Sequential, Size = 5), Serializable]
+struct SaveBlock
+{
+    public byte type;
+    public float iso;
+
+    public SaveBlock(byte type, float iso)
+    {
+        this.type = type;
+        this.iso = iso;
+    }
+}
+
+[StructLayout(LayoutKind.Sequential), Serializable]
+struct SaveStructure
+{
+
+    public int location_x;
+    public int location_y;
+    public int location_z;
+
+    //[MarshalAs(UnmanagedType.ByValArray, SizeConst = 20 * 20)]
+    public float[] heightmap;
+
+
+    public byte c0_min;
+    public byte c0_max;
+    public byte[] blocks_type_c0;
+    public float[] blocks_iso_c0;
+
+    public byte c1_min;
+    public byte c1_max;
+    public byte[] blocks_type_c1;
+    public float[] blocks_iso_c1;
+
+    //[MarshalAs(UnmanagedType.ByValArray, SizeConst = 20 * 20 * 128 * 5)]
+    //public SaveBlock[] blocks_c0;
+
+    /*public byte c1_min;
+    public byte c1_max;
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 20 * 20 * 128 * 5)]
+    public SaveBlock[] blocks_c1;*/
+
+    public void Serialize(System.IO.Stream stream)
+    {
+        stream.Seek(0, System.IO.SeekOrigin.Begin);
+        System.IO.BinaryWriter writer = new System.IO.BinaryWriter(stream, System.Text.Encoding.Default, true);
+
+        writer.Write(location_x);
+        writer.Write(location_y);
+        writer.Write(location_z);
+
+        byte[] h_buff = new byte[heightmap.Length * 4];
+        Buffer.BlockCopy(heightmap, 0, h_buff, 0, h_buff.Length);
+        writer.Write(h_buff);
+
+        // Chunk 0
+        writer.Write(c0_min);
+        writer.Write(c0_max);
+
+        writer.Write(blocks_type_c0);
+
+        byte[] iso_buf = new byte[blocks_iso_c0.Length * 4];
+        Buffer.BlockCopy(blocks_iso_c0, 0, iso_buf, 0, iso_buf.Length);
+        writer.Write(iso_buf);
+
+        // Chunk 1
+        writer.Write(c1_min);
+        writer.Write(c1_max);
+
+        writer.Write(blocks_type_c1);
+
+        //iso_buf = new byte[blocks_iso_c1.Length * 4];
+        Buffer.BlockCopy(blocks_iso_c1, 0, iso_buf, 0, iso_buf.Length);
+        writer.Write(iso_buf);
+
+        writer.Flush();
+        writer.Close();
+    }
+
+    public void Deserialize(System.IO.Stream stream)
+    {
+        //stream.Seek(0, System.IO.SeekOrigin.Begin);
+        System.IO.BinaryReader reader = new System.IO.BinaryReader(stream, System.Text.Encoding.Default, true);
+
+
+        location_x = reader.ReadInt32();
+        location_y = reader.ReadInt32();
+        location_z = reader.ReadInt32();
+
+        heightmap = new float[20 * 20];
+        byte[] h_buff = new byte[heightmap.Length * 4];
+        reader.Read(h_buff, 0, h_buff.Length);
+        Buffer.BlockCopy(h_buff, 0, heightmap, 0, h_buff.Length);
+
+        // Chunk 0
+        c0_min = reader.ReadByte();
+        c0_max = reader.ReadByte();
+
+        blocks_type_c0 = new byte[20 * 20 * 128]; 
+        reader.Read(blocks_type_c0, 0, blocks_type_c0.Length);
+
+        blocks_iso_c0 = new float[20 * 20 * 128];
+        byte[] iso_buf = new byte[blocks_iso_c0.Length * 4];
+        reader.Read(iso_buf, 0, iso_buf.Length);
+        Buffer.BlockCopy(iso_buf, 0, blocks_iso_c0, 0, iso_buf.Length);
+
+        // Chunk 1
+        c1_min = reader.ReadByte();
+        c1_max = reader.ReadByte();
+
+        blocks_type_c1 = new byte[20 * 20 * 128];
+        reader.Read(blocks_type_c1, 0, blocks_type_c1.Length);
+
+        blocks_iso_c1 = new float[20 * 20 * 128];
+        reader.Read(iso_buf, 0, iso_buf.Length);
+        Buffer.BlockCopy(iso_buf, 0, blocks_iso_c1, 0, iso_buf.Length);
+
+        reader.Close();
+    }
+}

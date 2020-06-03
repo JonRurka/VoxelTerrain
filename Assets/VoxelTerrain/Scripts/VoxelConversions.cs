@@ -32,6 +32,20 @@ public static class VoxelConversions {
         return new Vector3Int(x, y, z);
     }
 
+    public static Vector2Int ChunkToRegion(Vector3Int location)
+    {
+        int x = Mathf.FloorToInt(location.x / (float)SmoothVoxelSettings.ChunksPerRegionX);
+        int z = Mathf.FloorToInt(location.z / (float)SmoothVoxelSettings.ChunksPerRegionZ);
+        return new Vector2Int(x, z);
+    }
+
+    public static Vector3Int RegionToChunk(Vector2Int location)
+    {
+        int x = ((location.x) * SmoothVoxelSettings.ChunksPerRegionX);
+        int z = ((location.y) * SmoothVoxelSettings.ChunksPerRegionZ);
+        return new Vector3Int(x, 0, z);
+    }
+
     public static Vector3Int VoxelToChunk(Vector3Int location) {
         int x = Mathf.FloorToInt(location.x / (float)SmoothVoxelSettings.ChunkSizeX);
         int y = Mathf.FloorToInt(location.y / (float)SmoothVoxelSettings.ChunkSizeY);

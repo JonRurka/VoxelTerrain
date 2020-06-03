@@ -15,6 +15,7 @@ Shader "Custom/ChunkShader"
        _Emission("Emission", Range(0,1)) = 0.0
        _Alpha("Alpha", Range(0,1)) = 0.0
        _Occlusion("Occlusion", Range(0,1)) = 1.0
+       _Color("Color", Color) = (1,1,1,1)
        _Textures("Textures", 2DArray) = "" {}
        //_Data("Volume", 3D) = "" {}
        _chunk("Chunk", Vector) = (0, 0, 0)
@@ -22,11 +23,14 @@ Shader "Custom/ChunkShader"
        _NumTextures("Num Textures", Float) = 0
        _VoxelHalf("VoxelHalf", Float) = 0
        _voxelsPerMeter("voxelsPerMeter", Float) = 0
+       _DataPadding("Data Padding", Int) = 0
+       _BaseScale("Base Scale", Float) = 1
        _SideScale("Side Scale", Float) = 2
        _TopScale("Top Scale", Float) = 2
        _BottomScale("Bottom Scale", Float) = 2
        _Ambience("Ambience", Float) = 1
        _BlendFactor("Blend Factor", Float) = 1
+       
     }
     SubShader
     {
@@ -42,6 +46,7 @@ Shader "Custom/ChunkShader"
 
             uniform StructuredBuffer<uint> _Data;
             uniform StructuredBuffer<uint> _textureMap;
+            uniform StructuredBuffer<float4> _typeColor;
 
             uniform StructuredBuffer<uint> _edgeData;
 
@@ -53,13 +58,16 @@ Shader "Custom/ChunkShader"
             float3 _Dimensions;
             int _NumTextures;
 
+            int _DataPadding;
+
             half _Glossiness;
             half _Metallic;
             half _Emission;
             half _Alpha;
             half _Occlusion;
+            fixed4 _Color;
 
-            float _SideScale, _TopScale, _BottomScale, _Ambience, _VoxelHalf, _voxelsPerMeter, _BlendFactor;
+            float _BaseScale, _SideScale, _TopScale, _BottomScale, _Ambience, _VoxelHalf, _voxelsPerMeter, _BlendFactor;
 
 #ifndef LIGHTMAP_ON
             // half-precision fragment shader registers:
@@ -233,7 +241,18 @@ Shader "Custom/ChunkShader"
 
             int Get_Flat_Index(int x, int y, int z)
             {
-               return x + (_Dimensions.y + 2) * (y + (_Dimensions.z + 2) * z);
+               int add_size_x = _Dimensions.x;// +_DataPadding;
+               int add_size_y = _Dimensions.y;// +_DataPadding;
+
+               //x += _DataPadding / 2;
+               //y += _DataPadding / 2;
+               //z += _DataPadding / 2;
+
+               x = clamp(x, 0, _Dimensions.x);
+               y = clamp(y, 0, _Dimensions.y);
+               z = clamp(z, 0, _Dimensions.z);
+
+               return x + (add_size_x) * (y + (add_size_y) * z);
             }
 
             float Scale(float value, float oldMin, float oldMax, float newMin, float newMax)
@@ -259,23 +278,72 @@ Shader "Custom/ChunkShader"
                return v_dir;
             }
 
-            float3 tri_sample(half3 worldNormal, float3 projNormal, float3 postion, float index)
+            float hash(float n)
             {
-               float2 uv = frac(postion.zy * _SideScale);
-               float3 x = UNITY_SAMPLE_TEX2DARRAY(_Textures, float3(uv.x, uv.y, index)) * abs(worldNormal.x);
+               return frac(sin(n)*43758.5453);
+            }
+
+            float noise(float3 x)
+            {
+               // The noise function returns a value in the range -1.0f -> 1.0f
+
+               float3 p = floor(x);
+               float3 f = frac(x);
+
+               f = f * f*(3.0 - 2.0*f);
+               float n = p.x + p.y*57.0 + 113.0*p.z;
+
+               return lerp(lerp(lerp(hash(n + 0.0), hash(n + 1.0), f.x),
+                  lerp(hash(n + 57.0), hash(n + 58.0), f.x), f.y),
+                  lerp(lerp(hash(n + 113.0), hash(n + 114.0), f.x),
+                     lerp(hash(n + 170.0), hash(n + 171.0), f.x), f.y), f.z);
+            }
+
+            inline float3 blend_sample(float2 uv, float i1, float i2, float i3, float i4)
+            {
+               float2 offset1 = float2(0, 0); 
+               float2 offset2 = float2(0.25, 0.25);
+               float2 offset3 = float2(0.50, 0.50);
+               float2 offset4 = float2(0.75, 0.75);
+
+               float2 uv1 = frac((uv + offset1) * (_BaseScale / 3));
+               float2 uv2 = frac((uv + offset2) * _BaseScale);
+               float2 uv3 = frac((uv + offset3) * (_BaseScale / 3));
+               float2 uv4 = frac((uv + offset4) * _BaseScale);
+
+               float3 t1 = UNITY_SAMPLE_TEX2DARRAY(_Textures, float3(uv1.x, uv1.y, i1));
+              // return t1;
+
+
+               float3 t2 = UNITY_SAMPLE_TEX2DARRAY(_Textures, float3(uv2.x, uv2.y, i2));
+               float3 t3 = UNITY_SAMPLE_TEX2DARRAY(_Textures, float3(uv3.x, uv3.y, i1));
+               float3 t4 = UNITY_SAMPLE_TEX2DARRAY(_Textures, float3(uv4.x, uv4.y, i1));
+
+               uv *= _BaseScale;
+
+               float d1 = Scale(noise(float3(uv.x * 1, 0, uv.y * 1)), -1, 1, 0, 1);
+               float d2 = Scale(noise(float3(uv.x * 1, 0, uv.y * 1)), -1, 1, 0, 1);
+               float d3 = Scale(noise(float3(uv.x * 0.5, 0, uv.y * 0.5)), -1, 1, 0, 1);
+
+               float3 tex1 = lerp(t2, t1, d1);
+               float3 tex2 = lerp(t3, t4, d2);
+
+               return lerp(tex2, tex1, d3);
+            }
+
+            float3 tri_sample(float3 worldPos, half3 worldNormal, float3 projNormal, float3 postion, float i1, float i2, float i3, float i4)
+            {
+               float3 x = blend_sample(worldPos.zy, i1, i2, i3, i4) * abs(worldNormal.x);
 
                float3 y = 0;
                if (worldNormal.y > 0) {
-                  uv = frac(postion.zx * _TopScale);
-                  y = UNITY_SAMPLE_TEX2DARRAY(_Textures, float3(uv.x, uv.y, index)) * abs(worldNormal.y);
+                  y = blend_sample(worldPos.zx, i1, i2, i3, i4) * abs(worldNormal.y);
                }
                else {
-                  uv = frac(postion.zx * _BottomScale);
-                  y = UNITY_SAMPLE_TEX2DARRAY(_Textures, float3(uv.x, uv.y, index)) * abs(worldNormal.y);
+                  y = blend_sample(worldPos.zx, i1, i2, i3, i4) * abs(worldNormal.y);
                }
 
-               uv = frac(postion.xy * _SideScale);
-               float3 z = UNITY_SAMPLE_TEX2DARRAY(_Textures, float3(uv.x, uv.y, index)) * abs(worldNormal.z);
+               float3 z = blend_sample(worldPos.xy, i1, i2, i3, i4) * abs(worldNormal.z);
 
                float3 Albedo = z;
                Albedo = lerp(Albedo, x, projNormal.x);
@@ -298,8 +366,12 @@ Shader "Custom/ChunkShader"
                float3 difference = localPos - localCenterPosition;
                float3 dir = normalize(difference);
 
-               uint type = _Data[Get_Flat_Index(localVoxel.x + 1, localVoxel.y + 1, localVoxel.z + 1)];
-               uint index1 = _textureMap[type * 6 + 0];
+               uint type = _Data[Get_Flat_Index(localVoxel.x, localVoxel.y, localVoxel.z)];
+               uint i1 = _textureMap[type * 6 + 0];
+               uint i2 = _textureMap[type * 6 + 1];
+               uint i3 = _textureMap[type * 6 + 2];
+               uint i4 = _textureMap[type * 6 + 3];
+               float4 col = _typeColor[type];
 
                float3 dirs[6] = {
                  float3(1, 0, 0),
@@ -313,22 +385,29 @@ Shader "Custom/ChunkShader"
                //uint numBlendCells = 0;
                   //BlendCell cells[6];
 
-               float3 Albedo = tri_sample(worldNormal, projNormal, localPos, (float)index1);
+               float3 Albedo = tri_sample(worldPos, worldNormal, projNormal, localPos, (float)i1, (float)i2, (float)i3, (float)i4);
 
 
                int3 otherVoxel = 0;
                uint o_type = 0;
-               uint other_index = 0;
+               uint oi1 = 0;
+               uint oi2 = 0;
+               uint oi3 = 0;
+               uint oi4 = 0;
                float3 dirLength = 0;
                float3 other_Albedo = 0;
                float t = 0;
                for (uint j = 0; j < 6; j++)
                {
                   otherVoxel = localVoxel + dirs[j];
-                  o_type = _Data[Get_Flat_Index(otherVoxel.x + 1, otherVoxel.y + 1, otherVoxel.z + 1)];
-                  other_index = _textureMap[o_type * 6 + 0];
+                  o_type = _Data[Get_Flat_Index(otherVoxel.x, otherVoxel.y, otherVoxel.z)];
+                  oi1 = _textureMap[o_type * 6 + 0];
+                  oi2 = _textureMap[o_type * 6 + 1];
+                  oi3 = _textureMap[o_type * 6 + 2];
+                  oi4 = _textureMap[o_type * 6 + 3];
+                  col = _typeColor[o_type];
 
-                  if (other_index != index1)
+                  if (oi1 != i1)
                   {
                      int frag_x_s = sign(dir.x);
                      int frag_y_s = sign(dir.y);
@@ -348,7 +427,7 @@ Shader "Custom/ChunkShader"
 
                         dirLength = (dirs[j] * difference);
 
-                        other_Albedo = tri_sample(worldNormal, projNormal, localPos, other_index);
+                        other_Albedo = tri_sample(worldPos, worldNormal, projNormal, localPos, (float)oi1, (float)oi2, (float)oi3, (float)oi4);
 
                         t = abs(length(dirLength) / (1 / _voxelsPerMeter)) * _BlendFactor;
 

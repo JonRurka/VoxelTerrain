@@ -12,6 +12,7 @@ public class Loom : MonoBehaviour {
         Warning,
         Error,
     }
+    [Serializable]
     public struct Message
     {
         public messageType type;
@@ -61,7 +62,7 @@ public class Loom : MonoBehaviour {
 
     private List<Action> _actions = new List<Action>();
     private List<Action> _spread = new List<Action>();
-    private List<Message> _messages = new List<Message>();
+    public List<Message> _messages = new List<Message>();
     private Dictionary<string, AsyncRunner> _AsynAction = new Dictionary<string, AsyncRunner>();
 
     public struct DelayedQueueItem {
@@ -221,6 +222,7 @@ public class Loom : MonoBehaviour {
     System.Diagnostics.Stopwatch watch = new System.Diagnostics.Stopwatch();
 
     // Update is called once per frame
+    public List<string> Logged = new List<string>();
     void Update() {
         lock (_actions) {
             _currentActions.Clear();
@@ -250,9 +252,10 @@ public class Loom : MonoBehaviour {
             _currentMessages.AddRange(_messages);
             _messages.Clear();
         }
+
         for (int i = 0; i < _currentMessages.Count; i++)
-        {
-            switch(_currentMessages[i].type)
+        {            
+            switch (_currentMessages[i].type)
             {
                 case messageType.Log:
                     Debug.Log(_currentMessages[i].message);
