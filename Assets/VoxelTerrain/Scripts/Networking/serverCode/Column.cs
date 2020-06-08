@@ -14,13 +14,16 @@ namespace UnityGameServer
 {
     public class Column
     {
-        public enum LOD_Mode
+        public enum UpdateMode
         {
-            Empty,
-            Heightmap,
-            ReducedDepth,
-            Full,
+            EmptyToHeightmap,
+            EmptyToReduced,
+            EmptyToFull,
+            HeightmapToReduced,
+            HeightmapToFull,
+            ReducedToFull,
         }
+
 
         public Vector3Int Location { get; private set; }
 
@@ -114,6 +117,8 @@ namespace UnityGameServer
         private Vector3[] locOffset;
         private Vector3Int[] globalOffsets;
 
+        private UpdateMode updateMode;
+
         public Column(Region region, string folder, Vector3Int location)
         {
             Region = region;
@@ -139,8 +144,58 @@ namespace UnityGameServer
 
         public void BuildChunk(LOD_Mode mode = LOD_Mode.Full)
         {
+            if (mode <= Current_Mode)
+                return;
+
+            if (mode > Current_Mode && mode <= Max_Mode)
+            {
+                Deserialize(mode);
+                return;
+            }
+
+            // mode must be greater than max
+            if (Current_Mode == LOD_Mode.Empty)
+            {
+                switch (mode)
+                {
+                    case LOD_Mode.Heightmap:
+                        updateMode = UpdateMode.EmptyToHeightmap;
+                        break;
+
+                    case LOD_Mode.ReducedDepth:
+                        updateMode = UpdateMode.EmptyToReduced;
+                        break;
+
+                    case LOD_Mode.Full:
+                        updateMode = UpdateMode.HeightmapToFull;
+                        break;
+                }
+            }
+            else if (Current_Mode == LOD_Mode.Heightmap)
+            {
+                switch(mode)
+                {
+                    case LOD_Mode.ReducedDepth:
+                        updateMode = UpdateMode.HeightmapToReduced;
+                        break;
+
+                    case LOD_Mode.Full:
+                        updateMode = UpdateMode.HeightmapToFull;
+                        break;
+                }
+            }
+            else if (Current_Mode == LOD_Mode.ReducedDepth)
+            {
+                updateMode = UpdateMode.ReducedToFull;
+            }
+            else
+                return;
+
+
             Max_Mode = mode;
             Current_Mode = mode;
+
+
 
 
             GenerateHeightMap();
@@ -204,34 +259,71 @@ namespace UnityGameServer
             int zStart = cz * ChunkSizeZ;
             int zEnd = cz * ChunkSizeZ + ChunkSizeZ;
 
-            int x = 0;
-            int y = 0;
-            int z = 0;
-
             int globalLocX = 0;
             int globalLocY = 0;
             int globalLocZ = 0;
 
+            int x = 0;
+            int y = 0;
+            int z = 0;
+
+            int Y_Min = 0;
             int Y_Max = ChunkSizeY;
 
-            if (LoadedFromDisk && !ReduceDepth && Max_Mode == LOD_Mode.Full)
-                Y_Max = VoxelConversions.GlobalToLocalChunkCoord(VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMin() - Depth, 0))).y;
+            int heightmapMin = VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMin() - Depth, 0)).y;
+            int heightmapMin_local = VoxelConversions.GlobalToLocalChunkCoord(new Vector3Int(0, heightmapMin, 0)).y;
 
+            int heightmapMax = VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMax(), 0)).y;
+            int heightmapMax_local = VoxelConversions.GlobalToLocalChunkCoord(new Vector3Int(0, heightmapMax, 0)).y;
 
-            for (globalLocY = yStart, y = 0; y < Y_Max; globalLocY++, y++)
+            if (updateMode == UpdateMode.EmptyToHeightmap)
             {
-                if (globalLocY > Sampler.GetMax())
+                return;
+            }
+            else if (updateMode == UpdateMode.EmptyToReduced || updateMode == UpdateMode.EmptyToFull ||
+                     updateMode == UpdateMode.HeightmapToReduced || updateMode == UpdateMode.HeightmapToFull)
+            {
+                switch (updateMode)
+                {
+                    case UpdateMode.EmptyToReduced:
+                    case UpdateMode.HeightmapToReduced:
+                        Y_Min = heightmapMin_local;
+                        yStart += Y_Min;
+                        Y_Max = heightmapMax_local;
+                        break;
+
+                    case UpdateMode.EmptyToFull:
+                    case UpdateMode.HeightmapToFull:
+                        Y_Max = heightmapMax_local;
+                        break;
+                }
+            }
+            else if (updateMode == UpdateMode.ReducedToFull)
+            {
+                Y_Max = heightmapMin_local;
+            }
+
+            //else if(updateMode == UpdateMode.)
+
+            //if (LoadedFromDisk && !ReduceDepth && Max_Mode == LOD_Mode.Full)
+            //    Y_Max = VoxelConversions.GlobalToLocalChunkCoord(VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMin() - Depth, 0))).y;
+
+
+            for (globalLocY = yStart, y = Y_Min; y < Y_Max; globalLocY++, y++)
+            {
+                /*if (globalLocY > Sampler.GetMax())
                 {
                     //Logger.Log("broke at " + y);
                     break;
                 }
-                Max = y;
+                if (!LoadedFromDisk && !ReduceDepth && Max_Mode == LOD_Mode.Full)
+                    Max = y;
 
                 if ((ReduceDepth && globalLocY < Sampler.GetMin() - Depth))
                 {
                     continue;
                 }
-                Min = Mathf.Min(y, Min);
+                Min = Mathf.Min(y, Min);*/
 
                 for (globalLocZ = zStart, z = 0; z < ChunkSizeZ; globalLocZ++, z++)
                 {
@@ -442,7 +534,7 @@ namespace UnityGameServer
 
         public void Serialize()
         {
-            FileStream stream = new FileStream(ColumnFile, FileMode.CreateNew, FileAccess.Write, FileShare.Write);
+            FileStream stream = new FileStream(ColumnFile, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Write);
             BinaryWriter writer = new BinaryWriter(stream, System.Text.Encoding.Default, false);
 
             writer.Write((int)Max_Mode);
@@ -463,12 +555,16 @@ namespace UnityGameServer
             writer.Write(surfaceBlocksCount);
             writer.Write(buff);
 
+            Logger.Log("Serializing from {0} to {1}.", Min, Max);
+            int start = Get_Flat_Index(0, Math.Max(Min - 1, 0), 0);
+            int length = ((Max + 1) - (Min - 1)) * 20 * 20;
+
             // Save all block types
-            writer.Write(blocks_type);
+            writer.Write(blocks_type, start, length);
 
             // Save all block ISO
-            buff = new byte[blocks_iso.Length * 4];
-            Buffer.BlockCopy(blocks_iso, 0, buff, 0, buff.Length);
+            buff = new byte[length * 4];
+            Buffer.BlockCopy(blocks_iso, start, buff, 0, buff.Length);
             writer.Write(buff);
 
             writer.Close();
@@ -498,7 +594,7 @@ namespace UnityGameServer
             Buffer.BlockCopy(buff, 0, SurfaceData, 0, buff.Length);
             SurfaceGenerated = true;
 
-            if (Max_Mode == LOD_Mode.Heightmap || Current_Mode == LOD_Mode.Heightmap)
+            if (Max_Mode <= LOD_Mode.Heightmap || Current_Mode <= LOD_Mode.Heightmap)
             {
                 reader.Close();
                 return LOD_Mode.Heightmap;
@@ -510,25 +606,24 @@ namespace UnityGameServer
             reader.Read(buff, 0, buff.Length);
             Buffer.BlockCopy(buff, 0, surfaceBlocks, 0, buff.Length);
 
-            if (Max_Mode == LOD_Mode.ReducedDepth || Current_Mode == LOD_Mode.ReducedDepth)
-            {
-                reader.Close();
-                return LOD_Mode.ReducedDepth;
-            }
+
+            Logger.Log("Deserializing from {0} to {1}.", Min, Max);
+            int start = Get_Flat_Index(0, Math.Max(Min - 1, 0), 0);
+            int length = ((Max + 1) - (Min - 1)) * 20 * 20;
 
             // Load all block types
-            reader.Read(blocks_type, 0, blocks_type.Length);
+            reader.Read(blocks_type, start, length);
 
             // Load all block ISO
-            buff = new byte[blocks_iso.Length * 4];
+            buff = new byte[length * 4];
             reader.Read(buff, 0, buff.Length);
-            Buffer.BlockCopy(buff, 0, blocks_iso, 0, buff.Length);
+            Buffer.BlockCopy(buff, 0, blocks_iso, start, buff.Length);
 
 
             reader.Close();
 
             FullyLoaded = true;
-            return LOD_Mode.Full;
+            return (LOD_Mode)Math.Min((int)Current_Mode, (int)Max_Mode);
         }
 
         public static string GetColumnFile(string folder, Vector3Int location)
@@ -539,6 +634,8 @@ namespace UnityGameServer
 
         private void CalculateVariables()
         {
+            Current_Mode = LOD_Mode.Empty;
+            Max_Mode = LOD_Mode.Empty;
             Depth = 10;
             ChunkSizeX = (int)(ChunkMeterSizeX * VoxelsPerMeter);
             ChunkSizeY = (int)(ChunkMeterSizeY * VoxelsPerMeter);

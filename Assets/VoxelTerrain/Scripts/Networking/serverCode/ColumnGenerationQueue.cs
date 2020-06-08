@@ -13,16 +13,16 @@ namespace UnityGameServer
         {
             public Vector3Int Column { get; private set; }
             public Region Region { get; private set; }
-            public Column.LOD_Mode Mode { get; set; } 
+            public LOD_Mode Mode { get; set; } 
             public User Requester { get; private set; }
             public ConcurrentQueue<User> Subscribers { get; private set; }
-            public Action<QueueEntry> Callback { get; private set; }
+            public Action<QueueEntry, Column> Callback { get; private set; }
             public object Meta { get; private set; }
             public bool Processed { get; private set; }
 
             private readonly object _padLock = new object();
 
-            public QueueEntry(Vector3Int location, Region region, Column.LOD_Mode mode, User requester, Action<QueueEntry> callback, object meta)
+            public QueueEntry(Vector3Int location, Region region, LOD_Mode mode, User requester, Action<QueueEntry, Column> callback, object meta)
             {
                 Column = location;
                 Region = region;
@@ -35,11 +35,11 @@ namespace UnityGameServer
                 Subscribers.Enqueue(requester);
             }
 
-            public void Subscribe(User user, Column.LOD_Mode new_mode)
+            public void Subscribe(User user, LOD_Mode new_mode)
             {
                 lock (_padLock)
                 {
-                    Mode = (Column.LOD_Mode)Math.Max((int)Mode, (int)new_mode);
+                    Mode = (LOD_Mode)Math.Max((int)Mode, (int)new_mode);
                     if (!Subscribers.Contains(user))
                     {
                         Subscribers.Enqueue(user);
@@ -69,7 +69,7 @@ namespace UnityGameServer
                         {
                             usr.RequestedColumnGenerated(column, Meta);
                         }
-                        Callback?.Invoke(this);
+                        Callback?.Invoke(this, column);
                     });
                 }
             }
@@ -108,7 +108,7 @@ namespace UnityGameServer
             }
         }
 
-        public void QueueGeneration(Vector3Int location, Region region, Column.LOD_Mode mode, User requester, Action<QueueEntry> callback, object Meta)
+        public void QueueGeneration(Vector3Int location, Region region, LOD_Mode mode, User requester, Action<QueueEntry, Column> callback, object Meta)
         {
             if (Columns.ContainsKey(location))
             {
@@ -121,7 +121,7 @@ namespace UnityGameServer
             genQueue.Enqueue(location);
         }
 
-        public void Subscribe(Vector3Int location, User user, Column.LOD_Mode mode)
+        public void Subscribe(Vector3Int location, User user, LOD_Mode mode)
         {
             if (Columns.ContainsKey(location))
             {
@@ -140,6 +140,7 @@ namespace UnityGameServer
         {
             TaskQueue.QeueAsync("Gen_" + num, () =>
             {
+
                 while (Run)
                 {
                     Vector3Int loc;

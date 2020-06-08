@@ -16,7 +16,7 @@ public class TerrainSampler : ISampler
     public float grassOffset;
 
     public float[] SurfaceData;
-    public int[] pantMap;
+    public int[] plantMap;
     public bool SurfaceSet = false;
 
     public double VoxelsPerMeter;
@@ -53,7 +53,7 @@ public class TerrainSampler : ISampler
         ChunkSizeZ = chunkSizes.z;
 
         SurfaceData = new float[(ChunkSizeX + 2) * (ChunkSizeZ + 2)];
-        pantMap = new int[ChunkSizeX * ChunkSizeZ];
+        plantMap = new int[ChunkSizeX * ChunkSizeZ];
     }
 
     public double GetHeight(int x, int y)
@@ -193,7 +193,7 @@ public class TerrainSampler : ISampler
                         }
                     }
 
-                    pantMap[(x - 1) * (ChunkSizeZ) + (z - 1)] = type;
+                    plantMap[(x - 1) * (ChunkSizeZ) + (z - 1)] = type;
                 }
                 SurfaceData[x * (ChunkSizeZ + 2) + z] = val;
             }
@@ -209,7 +209,7 @@ public class TerrainSampler : ISampler
 
     public int[] GetPlantMap()
     {
-        return pantMap;
+        return plantMap;
     }
 
     public double GetMin()
@@ -226,5 +226,6 @@ public class TerrainSampler : ISampler
     {
         NoiseModule = null;
         caveModule = null;
+        SurfaceData = null;
     }
 }

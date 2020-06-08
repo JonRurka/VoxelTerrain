@@ -13,6 +13,7 @@ public class VoxelServer : GameServer<VoxelServer>
 {
     public Settings ServSettings { get; private set; }
     public RegionLoader Regions { get; private set; }
+    public ColumnGenerationQueue GenerationQueue { get; set; }
 
     public VoxelServer(string[] args) : base(args)
     {
@@ -39,7 +40,11 @@ public class VoxelServer : GameServer<VoxelServer>
 
         //Debug.Log("Size: " + System.Runtime.InteropServices.Marshal.SizeOf(typeof(SaveStructure)));
 
-        //Regions = new RegionLoader(System.IO.Directory.GetCurrentDirectory());
+        GenerationQueue = new ColumnGenerationQueue(1);
+        GenerationQueue.Start();
+
+        Regions = new RegionLoader(Directory.GetCurrentDirectory());
+
         //Region reg = Regions.CreateRegion(new Vector3Int(0, 0, 0));
         //reg.CreateColumn(new Vector3Int(0, 0, 0));
         //CommandInput.LoadCommands(this); // add to load custom console commands.
@@ -81,6 +86,13 @@ public class VoxelServer : GameServer<VoxelServer>
         //Logger.Log("Voxel Server: UDP Enabled! " + user.SessionToken);
     }
 
+    public void RequestChunkGen(Vector3Int chunkCord, Region region, LOD_Mode lod_Version, User requester, bool has_heightmap)
+    {
+        GenerationQueue.QueueGeneration(chunkCord, region, (LOD_Mode)lod_Version, requester, (queueEntry, column) => {
+            Logger.Log("{0} Adding chunk to queue for (Re)generation. LOD Level: {1}.", requester.Name, ((LOD_Mode)lod_Version).ToString());
+        }, has_heightmap);
+    }
+
     public ISampler GetSampler()
     {
         TerrainModule module = new TerrainModule(SmoothVoxelSettings.seed);
@@ -97,24 +109,49 @@ public class VoxelServer : GameServer<VoxelServer>
     [Command(ServerCodes.Identify)]
     public void Identify_CMD(SocketUser user, Data data)
     {
+        Logger.Log("Identify received!");
         User server_user = new User(data.Input);
         server_user.SetSocket(user);
-        user.Send((byte)ClientCodes.Identified, "Welcome " + data.Input);
+        user.SetUser(server_user);
+        user.Send((byte)ClientCodes.Identified, "Welcome " + server_user.Name);
     }
 
-    [Command(ServerCodes.GetChunk)]
+    [Command(ServerCodes.RequestChunk)]
     public void GetChunk_Cmd(SocketUser user, Data data)
     {
+        User userInst = (User)user.User;
+
         int chunkX = BitConverter.ToInt32(data.Buffer, 0);
         int chunkY = BitConverter.ToInt32(data.Buffer, 4);
         int chunkZ = BitConverter.ToInt32(data.Buffer, 8);
         int lod_Version = BitConverter.ToInt32(data.Buffer, 12);
+        bool has_heightmap = BitConverter.ToBoolean(data.Buffer, 16);
 
         Vector3Int chunkCord = new Vector3Int(chunkX, chunkY, chunkZ);
         Vector2Int Region = VoxelConversions.ChunkToRegion(chunkCord);
 
         Region region = Regions.LoadORCreate(Region);
 
+        Logger.Log("User {0} requested {1}.", userInst.Name, chunkCord);
 
+        if (region.ChunkExists(chunkCord))
+        {
+            Column col = region.GetColumn(user.User, chunkCord, (LOD_Mode)lod_Version);
+            if (col.Max_Mode < (LOD_Mode)lod_Version)
+            {
+                Logger.Log("Requesting chunk update: " + DebugTimer.Elapsed());
+                RequestChunkGen(chunkCord, region, (LOD_Mode)lod_Version, userInst, has_heightmap);
+            }
+            else
+            {
+                Logger.Log("Transmitting chunk: " + DebugTimer.Elapsed());
+                userInst.TransmitColumn(col, has_heightmap);
+            }
+        }
+        else
+        {
+            Logger.Log("Requesting new chunk: " + DebugTimer.Elapsed());
+            RequestChunkGen(chunkCord, region, (LOD_Mode)lod_Version, userInst, has_heightmap);
+        }
     }
 }

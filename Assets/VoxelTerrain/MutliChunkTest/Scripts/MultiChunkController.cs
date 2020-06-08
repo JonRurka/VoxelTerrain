@@ -10,15 +10,6 @@ using Debug = UnityEngine.Debug;
 
 public class MultiChunkController : MonoBehaviour, IPageController
 {
-    [Serializable]
-    public class VoxelMaterial
-    {
-        public string Name;
-        public BaseType Type;
-        public Color Color;
-        public Texture2D[] Textures;
-    }
-
     public GameObject chunkPrefab;
     public BlockType[] BlocksArray;
 
@@ -372,4 +363,6 @@ public class MultiChunkController : MonoBehaviour, IPageController
             Chunks[new Vector3Int(x, y, z)].Render(true);
         }
     }
+
+    
 }

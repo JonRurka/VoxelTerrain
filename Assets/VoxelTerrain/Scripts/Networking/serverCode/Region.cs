@@ -15,7 +15,7 @@ namespace UnityGameServer
         public string RegionDirectory { get; private set; }
 
         public ConcurrentDictionary<Vector3Int, Column> Columns;
-        public ConcurrentDictionary<Vector3Int, Column.LOD_Mode> LOD_Modes;
+        public ConcurrentDictionary<Vector3Int, LOD_Mode> LOD_Modes;
 
 
         public Region(string regionDir, Vector2Int location)
@@ -23,7 +23,7 @@ namespace UnityGameServer
             Location = location;
             RegionDirectory = regionDir.EndsWith(ServerBase.sepChar.ToString()) ? regionDir : regionDir + ServerBase.sepChar;
             Columns = new ConcurrentDictionary<Vector3Int, Column>();
-            LOD_Modes = new ConcurrentDictionary<Vector3Int, Column.LOD_Mode>();
+            LOD_Modes = new ConcurrentDictionary<Vector3Int, LOD_Mode>();
 
             
         }
@@ -49,7 +49,7 @@ namespace UnityGameServer
 
         public bool ChunkExists(Vector3Int location)
         {
-            return Directory.Exists(Column.GetColumnFile(RegionDirectory, location));
+            return File.Exists(Column.GetColumnFile(RegionDirectory, location));
         }
 
         public bool ChunkLoaded(Vector3Int location)
@@ -62,29 +62,39 @@ namespace UnityGameServer
             return Columns.ContainsKey(location) && Columns[location].FullyLoaded;
         }
 
-        public Column LoadColumn(User requester, Vector3Int location, Column.LOD_Mode mode)
+        public Column GetColumn(IUser requester, Vector3Int location, LOD_Mode mode)
         {
             if (ChunkLoaded(location))
             {
-                return Columns[location];
+                Column col = Columns[location];
+                if (col.Max_Mode < mode)
+                {
+                    col = LoadColumn(requester, location, mode);
+                }
+                return col;
             }
+            return LoadColumn(requester, location, mode);
 
+        }
+
+        public Column LoadColumn(IUser requester, Vector3Int location, LOD_Mode mode)
+        {
             if (!ChunkExists(location))
                 throw new Exception("Column must be created with Region.CreateColumn() before attempting to load chunk.");
 
             Column column = new Column(this, RegionDirectory, location);
             column.Init((float)SmoothVoxelSettings.voxelsPerMeter, SmoothVoxelSettings.MeterSizeX, SmoothVoxelSettings.MeterSizeY, SmoothVoxelSettings.MeterSizeZ);
-            Column.LOD_Mode loaded_mode = column.Deserialize(mode);
+            LOD_Mode loaded_mode = column.Deserialize(mode);
             Columns[location] = column;
 
             return column;
         }
 
-        public Column CreateColumn(User requester, Vector3Int location, Column.LOD_Mode mode)
+        public Column CreateColumn(IUser requester, Vector3Int location, LOD_Mode mode)
         {
             if (ChunkLoaded(location))
             {
-                return Columns[location];
+                return GetColumn(requester, location, mode);
             }
 
             if (ChunkExists(location))
@@ -105,7 +115,7 @@ namespace UnityGameServer
             return column;
         }
 
-        public Column RegenerateColumn(User requester, Vector3Int location, Column.LOD_Mode mode)
+        public Column RegenerateColumn(IUser requester, Vector3Int location, LOD_Mode mode)
         {
             if (!ChunkExists(location))
                 throw new Exception("Chunk must exist in order to be regenerated.");
@@ -121,6 +131,7 @@ namespace UnityGameServer
             }
 
             column.BuildChunk(mode);
+            column.Serialize();
 
             return column;
             

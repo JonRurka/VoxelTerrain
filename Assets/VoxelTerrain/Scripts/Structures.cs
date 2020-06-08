@@ -494,3 +494,20 @@ struct SaveStructure
         reader.Close();
     }
 }
+
+[Serializable]
+public class VoxelMaterial
+{
+    public string Name;
+    public BaseType Type;
+    public Color Color;
+    public Texture2D[] Textures;
+}
+
+public enum LOD_Mode
+{
+    Empty,
+    Heightmap,
+    ReducedDepth,
+    Full,
+}

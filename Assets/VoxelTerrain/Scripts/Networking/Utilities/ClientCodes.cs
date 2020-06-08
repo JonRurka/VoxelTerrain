@@ -6,5 +6,6 @@ using System.Threading.Tasks;
 
 public enum ClientCodes
 {
-    Identified
+    Identified,
+    ReceiveChunk,
 }

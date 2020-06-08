@@ -548,6 +548,22 @@ public class SmoothChunk : MonoBehaviour, IChunk
         return Mat_index_array;
     }
 
+    public static void SpawnChunk(Vector3Int chunkPos, ISampler sampler, IPageController controller)
+    {
+        Vector3 worldPos = VoxelConversions.ChunkCoordToWorld(chunkPos);
+        double voxelsPerMeter = SmoothVoxelSettings.voxelsPerMeter;
+
+        SmoothVoxelBuilder builder = new SmoothVoxelBuilder(controller, chunkPos);
+        builder.SetBlockTypes(controller.BlockTypes, null);
+        builder.CalculateVariables(voxelsPerMeter, SmoothVoxelSettings.MeterSizeX, SmoothVoxelSettings.MeterSizeY, SmoothVoxelSettings.MeterSizeZ);
+        builder.Generate(sampler);
+
+        SmoothChunk chunk = GameObject.Instantiate(controller.ChunkPrefab).GetComponent<SmoothChunk>();
+        chunk.name = string.Format("Chunk_{0}.{1}.{2}", chunkPos.x, chunkPos.y, chunkPos.z);
+        chunk.Init(chunkPos, worldPos, null, controller, 1, builder);
+
+    }
+
     public static void CreateChunk(Vector3Int chunkPos, ISampler sampler, IPageController controller)
     {
         Vector3 worldPos = VoxelConversions.ChunkCoordToWorld(chunkPos);

@@ -10,6 +10,7 @@ public class GameController : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
+        DebugTimer.Init();
         Application.runInBackground = true;
         Debug.Log("Run in background: " + Application.runInBackground);
 

@@ -9,6 +9,8 @@ public class ChunkColumn : MonoBehaviour
     public Vector2Int Location;
     public SafeDictionary<int, SmoothChunk> Chunks;
 
+    public bool NetworkMode { get; set; }
+
     public int f_sizeX = 10;
     public int f_sizeZ = 10;
     public int perMeterX = 4;
@@ -55,6 +57,15 @@ public class ChunkColumn : MonoBehaviour
         //rend.material.SetFloat("__Time", MultiChunkController.T);
     }
 
+    public void Init(Vector2Int location, IPageController controller)
+    {
+        Chunks = new SafeDictionary<int, SmoothChunk>();
+        Location = location;
+        Controller = controller;
+        Sampler = new NetworkSampler();
+        NetworkMode = true;
+    }
+
     public void Init(Vector2Int location, IPageController controller, ISampler sampler)
     {
         Chunks = new SafeDictionary<int, SmoothChunk>();
@@ -98,6 +109,14 @@ public class ChunkColumn : MonoBehaviour
         compoot_shader.SetBuffer(c_k, "intermediate", output_buff);
     }
 
+    public void SetHeightmap(float[] heightmap)
+    {
+        if (NetworkMode)
+        {
+            ((NetworkSampler)Sampler).SetSurfaceData(heightmap);
+        }
+    }
+
     public void Generate(int height)
     {
         int chunkSizeX = SmoothVoxelSettings.ChunkSizeX;
@@ -114,9 +133,6 @@ public class ChunkColumn : MonoBehaviour
                                Mathf.RoundToInt(1 / (float)SmoothVoxelSettings.voxelsPerMeter),
                                ((1.0f / (float)SmoothVoxelSettings.voxelsPerMeter) / 2.0f),
                                new Vector3(meterSizeX / (float)chunkSizeX, meterSizeY / (float)chunkSizeY, meterSizeZ / (float)chunkSizeZ));
-        Vector2Int bottomLeft = new Vector2(Location.x * chunkSizeX, Location.y * chunkSizeZ);
-        Vector2Int topRight = new Vector2(Location.x * chunkSizeX + chunkSizeX, Location.y * chunkSizeZ + chunkSizeZ);
-        Sampler.SetSurfaceData(bottomLeft, topRight);
 
         Vector3Int topVoxel = VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMax(), 0));
         Vector3Int bottomVoxel = VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMin(), 0));
@@ -124,15 +140,32 @@ public class ChunkColumn : MonoBehaviour
         int topChunk = VoxelConversions.VoxelToChunk(topVoxel).y;
         int bottomChunk = VoxelConversions.VoxelToChunk(bottomVoxel).y;
 
-        for (int y = 0; y <= topChunk; y++)
+        if (NetworkMode)
         {
-            SmoothChunk.CreateChunk(new Vector3Int(Location.x, y, Location.y), Sampler, Controller);
+
+            for (int y = 0; y <= topChunk; y++)
+            {
+                SmoothChunk.CreateChunk(new Vector3Int(Location.x, y, Location.y), Sampler, Controller);
+            }
+
+
         }
-        Loom.QueueOnMainThread(() =>
+        else
         {
-            Debug.Log("Spawning grass...");
-            SpawnGrass();
-        });
+            Vector2Int bottomLeft = new Vector2(Location.x * chunkSizeX, Location.y * chunkSizeZ);
+            Vector2Int topRight = new Vector2(Location.x * chunkSizeX + chunkSizeX, Location.y * chunkSizeZ + chunkSizeZ);
+            Sampler.SetSurfaceData(bottomLeft, topRight);
+
+            for (int y = 0; y <= topChunk; y++)
+            {
+                SmoothChunk.CreateChunk(new Vector3Int(Location.x, y, Location.y), Sampler, Controller);
+            }
+            Loom.QueueOnMainThread(() =>
+            {
+                Debug.Log("Spawning grass...");
+                SpawnGrass();
+            });
+        }
     }
 
     public void AddChunk(int pos, IChunk chunk)

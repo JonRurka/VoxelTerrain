@@ -43,7 +43,7 @@ namespace UnityGameServer
                     }
                     catch (Exception e)
                     {
-                        Logger.LogError("Queue: {0}", e.Message);
+                        Logger.LogError("Queue: Message: {0}\n {1}", e.Message, e.StackTrace);
                         Logger.LogError(e.StackTrace);
                         _currentActions[i] = null;
                     }

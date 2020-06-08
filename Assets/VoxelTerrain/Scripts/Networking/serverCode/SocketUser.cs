@@ -136,7 +136,14 @@ namespace UnityGameServer.Networking
         {
             User = user;
             if (User != null)
+            {
+                Logger.Log("Set user: " + ((User)User).Name);
                 User.SetSocket(this);
+            }
+            else
+            {
+                Logger.Log("IUser null");
+            }
         }
 
         public void Send(byte command, string message, Protocal type = Protocal.Tcp)
