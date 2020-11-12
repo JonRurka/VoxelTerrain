@@ -548,6 +548,11 @@ public class SmoothChunk : MonoBehaviour, IChunk
         return Mat_index_array;
     }
 
+    public void NetworkSetData(ColumnPacket packet)
+    {
+
+    }
+
     public static void SpawnChunk(Vector3Int chunkPos, ISampler sampler, IPageController controller)
     {
         Vector3 worldPos = VoxelConversions.ChunkCoordToWorld(chunkPos);

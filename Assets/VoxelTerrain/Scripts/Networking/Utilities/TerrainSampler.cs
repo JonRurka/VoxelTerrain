@@ -165,6 +165,19 @@ public class TerrainSampler : ISampler
         return rValue;
     }
 
+    public float[] SetSurfaceData(float[] data)
+    {
+        for (int i = 0; i < data.Length; i++)
+        {
+            float val = data[i];
+            min = Mathf.Min(min, val);
+            max = Mathf.Max(max, val);
+            SurfaceData[i] = val;
+        }
+        SurfaceSet = true;
+        return SurfaceData;
+    }
+
     public float[] SetSurfaceData(Vector2Int bottomLeft, Vector2Int topRight)
     {
         if (SurfaceSet)

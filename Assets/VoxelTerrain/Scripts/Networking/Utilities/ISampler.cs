@@ -11,6 +11,7 @@ public interface ISampler : System.IDisposable
     double Noise(IModule module, float x, float y, float z, double scale, double height, double power);
     double GetHeight(int x, int y);
     float[] SetSurfaceData(Vector2Int bottomLeft, Vector2Int topRight);
+    float[] SetSurfaceData(float[] data);
     float[] GetSurfaceData();
     double GetSurfaceHeight(int LocalX, int LocalZ);
     double GetMin();

@@ -116,6 +116,16 @@ public class SphereSampler : ISampler
         return rValue;
     }
 
+    public float[] SetSurfaceData(float[] data)
+    {
+        for (int i = 0; i < data.Length; i++)
+        {
+            float val = data[i];
+            SurfaceData[i] = val;
+        }
+        return SurfaceData;
+    }
+
     public float[] SetSurfaceData(Vector2Int bottomLeft, Vector2Int topRight)
     {
         for (int noiseX = bottomLeft.x - 1, x = 0; noiseX < topRight.x + 1; noiseX++, x++)

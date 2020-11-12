@@ -144,6 +144,7 @@ namespace UnityGameServer
 
         public void BuildChunk(LOD_Mode mode = LOD_Mode.Full)
         {
+            Logger.Log("BuildChunk - mode: {0}, Current_Mode: {1}, Max_Mode:{2}", mode, Current_Mode, Max_Mode);
             if (mode <= Current_Mode)
                 return;
 
@@ -241,8 +242,6 @@ namespace UnityGameServer
             Stopwatch watch = new Stopwatch();
             watch.Start();
 
-            Min = int.MaxValue;
-
             surfaceBlocksCount = 0;
             GeneratedBlocks = 0;
 
@@ -276,6 +275,8 @@ namespace UnityGameServer
             int heightmapMax = VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMax(), 0)).y;
             int heightmapMax_local = VoxelConversions.GlobalToLocalChunkCoord(new Vector3Int(0, heightmapMax, 0)).y;
 
+            Logger.Log("Generating with updated mode {0}: {1}", updateMode.ToString(), DebugTimer.Elapsed());
+
             if (updateMode == UpdateMode.EmptyToHeightmap)
             {
                 return;
@@ -283,6 +284,8 @@ namespace UnityGameServer
             else if (updateMode == UpdateMode.EmptyToReduced || updateMode == UpdateMode.EmptyToFull ||
                      updateMode == UpdateMode.HeightmapToReduced || updateMode == UpdateMode.HeightmapToFull)
             {
+                Min = int.MaxValue;
+                Max = int.MinValue;
                 switch (updateMode)
                 {
                     case UpdateMode.EmptyToReduced:
@@ -301,6 +304,7 @@ namespace UnityGameServer
             else if (updateMode == UpdateMode.ReducedToFull)
             {
                 Y_Max = heightmapMin_local;
+                Logger.Log("ReducedToFull: " + heightmapMin_local);
             }
 
             //else if(updateMode == UpdateMode.)
@@ -322,8 +326,9 @@ namespace UnityGameServer
                 if ((ReduceDepth && globalLocY < Sampler.GetMin() - Depth))
                 {
                     continue;
-                }
-                Min = Mathf.Min(y, Min);*/
+                }*/
+                Max = Mathf.Max(y, Max);
+                Min = Mathf.Min(y, Min);
 
                 for (globalLocZ = zStart, z = 0; z < ChunkSizeZ; globalLocZ++, z++)
                 {
@@ -347,7 +352,7 @@ namespace UnityGameServer
             }
 
             watch.Stop();
-            SafeDebug.Log("Generate: " + watch.Elapsed);
+            Logger.Log("Generated from {0} to {1}: " + DebugTimer.Elapsed(), Y_Min, Y_Max);
         }
 
         public void ProcessBlock(GridPoint[] grid, float isoLevel)
@@ -555,7 +560,6 @@ namespace UnityGameServer
             writer.Write(surfaceBlocksCount);
             writer.Write(buff);
 
-            Logger.Log("Serializing from {0} to {1}.", Min, Max);
             int start = Get_Flat_Index(0, Math.Max(Min - 1, 0), 0);
             int length = ((Max + 1) - (Min - 1)) * 20 * 20;
 
@@ -567,8 +571,11 @@ namespace UnityGameServer
             Buffer.BlockCopy(blocks_iso, start, buff, 0, buff.Length);
             writer.Write(buff);
 
+
             writer.Close();
             writer.Dispose();
+
+            Logger.Log("Serialized from {0} to {1}: {2}", Min, Max, DebugTimer.Elapsed());
         }
 
         public LOD_Mode Deserialize(LOD_Mode load_mode)
@@ -581,8 +588,8 @@ namespace UnityGameServer
 
             LoadedFromDisk = true;
 
-            Current_Mode = load_mode;
             Max_Mode = (LOD_Mode)reader.ReadInt32();
+            Current_Mode = (LOD_Mode)Math.Min((int)load_mode, (int)Max_Mode);
             Min = reader.ReadInt32();
             Max = reader.ReadInt32();
             ReduceDepth = reader.ReadBoolean();
@@ -592,6 +599,7 @@ namespace UnityGameServer
             byte[] buff = new byte[SurfaceData.Length * 4];
             reader.Read(buff, 0, buff.Length);
             Buffer.BlockCopy(buff, 0, SurfaceData, 0, buff.Length);
+            Sampler.SetSurfaceData(SurfaceData);
             SurfaceGenerated = true;
 
             if (Max_Mode <= LOD_Mode.Heightmap || Current_Mode <= LOD_Mode.Heightmap)

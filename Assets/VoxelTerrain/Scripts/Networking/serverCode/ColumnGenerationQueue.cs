@@ -61,9 +61,11 @@ namespace UnityGameServer
                         column = Region.CreateColumn(Requester, Column, Mode);
                     }
 
+                    Logger.Log("ColumnGenerationQueue finished Gen: {0}", DebugTimer.Elapsed());
                     Processed = true;
                     TaskQueue.QueueMain(() =>
                     {
+                        Logger.Log("ColumnGenerationQueue finished Gen QueueMain: {0}", DebugTimer.Elapsed());
                         User usr;
                         while (Subscribers.TryDequeue(out usr))
                         {

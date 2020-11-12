@@ -34,7 +34,7 @@ public class GameClient
     {
         DebugTimer.Start();
 
-        BinaryWriter wrt = GetStream(20);
+        BinaryWriter wrt = GetWriterStream(20);
         wrt.Write(col.x);
         wrt.Write(0);
         wrt.Write(col.y);
@@ -54,9 +54,14 @@ public class GameClient
         client.Send((byte)ServerCodes.Identify, "nug700");
     }
 
-    private BinaryWriter GetStream(int capacity)
+    private BinaryWriter GetWriterStream(int capacity)
     {
         return new BinaryWriter(new MemoryStream(capacity));
+    }
+
+    private BinaryReader GetReaderStream(byte[] data)
+    {
+        return new BinaryReader(new MemoryStream(data));
     }
 
     private byte[] GetBytes(Stream strm)
@@ -76,5 +81,15 @@ public class GameClient
     {
         DebugTimer.Stop();
         SafeDebug.Log(string.Format("Received chunk: {0}, Time: {1}.", data.Buffer.Length, DebugTimer.Elapsed()));
+        BinaryReader reader = GetReaderStream(data.Buffer);
+
+        int locX = reader.ReadInt32();
+        int locY = reader.ReadInt32();
+        int locZ = reader.ReadInt32();
+        LOD_Mode mode = (LOD_Mode)reader.ReadByte();
+
+
+
+        //ColumnPacket packet = new ColumnPacket();
     }
 }
