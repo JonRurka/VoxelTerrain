@@ -24,7 +24,6 @@ namespace UnityGameServer
             ReducedToFull,
         }
 
-
         public Vector3Int Location { get; private set; }
 
         public string ColumnFile { get; private set; }
@@ -38,21 +37,102 @@ namespace UnityGameServer
         public bool ReduceDepth { get; set; }
         public float Depth { get; set; }
         public bool LoadedFromDisk { get; set; }
-        public int Min { get; private set; }
-        public int Max { get; private set; }
 
-        public byte[] blocks_type;
-        public float[] blocks_iso;
-        public bool[] blocks_set;
-        public bool[] blocks_surface;
-        public int[] surfaceBlocks;
-        public int surfaceBlocksCount { get; private set; }
+        public int Min {
+            get
+            {
+                return col_data.Min;
+            }
+            private set
+            {
+                col_data.Min = value;
+            }
+        }
+        public int Max {
+            get
+            {
+                return col_data.Max;
+            }
+            private set
+            {
+                col_data.Max = value;
+            }
+        }
+
+        public byte[] blocks_type {
+            get
+            {
+                return col_data.blocks_type;
+            }
+            set
+            {
+                col_data.blocks_type = value;
+            }
+        }
+
+        public float[] blocks_iso {
+            get
+            {
+                return col_data.blocks_iso;
+            }
+            set
+            {
+                col_data.blocks_iso = value;
+            }
+        }
+
+        public bool[] blocks_set {
+            get
+            {
+                return col_data.blocks_set;
+            }
+            set
+            {
+                col_data.blocks_set = value;
+            }
+        }
+
+        public bool[] blocks_surface {
+            get
+            {
+                return col_data.blocks_surface;
+            }
+            set
+            {
+                col_data.blocks_surface = value;
+            }
+        }
+
+        public uint[] surfaceBlocks {
+            get
+            {
+                return col_data.surfaceBlocks;
+            }
+            set
+            {
+                col_data.surfaceBlocks = value;
+            }
+        }
+
+        public int surfaceBlocksCount {
+            get
+            {
+                return col_data.surfaceBlocksCount;
+            }
+            private set
+            {
+                col_data.surfaceBlocksCount = value;
+            }
+        }
 
         public bool Initialized;
         public bool SurfaceGenerated;
         public bool deactivated;
 
-        public float[] SurfaceData;
+        public float[] SurfaceData { get { return col_data.SurfaceData; } }
+
+        private IColumnBuilder builder;
+        private ColumnResult col_data;
 
         private float VoxelsPerMeter;
         private int ChunkMeterSizeX;
@@ -77,7 +157,7 @@ namespace UnityGameServer
                 new Vector3Int(1, 1, 1),
                 new Vector3Int(1, 1, 0),
                 new Vector3Int(0, 1, 0),
-            };
+        };
         #region edgeTable
         private static int[] edgeTable = new int[256]
         {0x0 , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
@@ -140,6 +220,22 @@ namespace UnityGameServer
                                      skipDist,
                                      half,
                                      new Vector3(xSideLength, ySideLength, zSideLength));
+
+            col_data = new ColumnResult();
+            col_data.SurfaceData = new float[(ChunkSizeX + 2) * (ChunkSizeZ + 2)];
+
+            if (VoxelServer.Instance.Gpu_Acceloration)
+            {
+                GPU_ColumnBuilder _builder = new GPU_ColumnBuilder(col_data, Sampler);
+                _builder.Init(Location, VoxelsPerMeter, ChunkMeterSizeX, ChunkMeterSizeY, ChunkMeterSizeZ);
+                builder = _builder;
+            }
+            else
+            {
+                StandardColumnBuilder _builder = new StandardColumnBuilder(col_data, Sampler);
+                _builder.Init(Location, VoxelsPerMeter, ChunkMeterSizeX, ChunkMeterSizeY, ChunkMeterSizeZ);
+                builder = _builder;
+            }
         }
 
         public void BuildChunk(LOD_Mode mode = LOD_Mode.Full)
@@ -221,14 +317,14 @@ namespace UnityGameServer
 
             if (!SurfaceGenerated)
             {
-                Vector2Int bottomLeft = new Vector2(Location.x * ChunkSizeX, Location.z * ChunkSizeZ);
-                Vector2Int topRight = new Vector2(Location.x * ChunkSizeX + ChunkSizeX, Location.z * ChunkSizeZ + ChunkSizeZ);
-                SurfaceData = Sampler.SetSurfaceData(bottomLeft, topRight);
+                UnityGameServer.Logger.Log("Heightmap Generting...");
+                builder.GenerateHeightMap();
                 SurfaceGenerated = true;
             }
 
             watch.Stop();
-            SafeDebug.Log("Heightmap Gen: " + watch.Elapsed);
+            UnityGameServer.Logger.Log("Min: {0}, Max: {1}", Sampler.GetMin(), Sampler.GetMax());
+            UnityGameServer.Logger.Log("Heightmap Gen: " + watch.Elapsed);
         }
 
         public void Generate()
@@ -242,7 +338,7 @@ namespace UnityGameServer
             Stopwatch watch = new Stopwatch();
             watch.Start();
 
-            surfaceBlocksCount = 0;
+            //surfaceBlocksCount = 0;
             GeneratedBlocks = 0;
 
             int cx = Location.x;
@@ -269,11 +365,17 @@ namespace UnityGameServer
             int Y_Min = 0;
             int Y_Max = ChunkSizeY;
 
-            int heightmapMin = VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMin() - Depth, 0)).y;
-            int heightmapMin_local = VoxelConversions.GlobalToLocalChunkCoord(new Vector3Int(0, heightmapMin, 0)).y;
+            int heightmapMin = VoxelConversions.WorldToVoxel(new Vector3(0, Math.Max(0, (float)Sampler.GetMin() - Depth), 0)).y;
+            Logger.Log("heightmapMin: {0}", heightmapMin);
 
-            int heightmapMax = VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMax(), 0)).y;
+            int heightmapMin_local = VoxelConversions.GlobalToLocalChunkCoord(new Vector3Int(0, heightmapMin, 0)).y;
+            Logger.Log("heightmapMin_local: {0}", heightmapMin_local);
+
+            int heightmapMax = VoxelConversions.WorldToVoxel(new Vector3(0, Math.Min(SmoothVoxelSettings.MeterSizeY, (float)Sampler.GetMax()), 0)).y;
+            Logger.Log("heightmapMax: {0}", heightmapMax);
+
             int heightmapMax_local = VoxelConversions.GlobalToLocalChunkCoord(new Vector3Int(0, heightmapMax, 0)).y;
+            Logger.Log("heightmapMax_local: {0}", heightmapMax_local);
 
             Logger.Log("Generating with updated mode {0}: {1}", updateMode.ToString(), DebugTimer.Elapsed());
 
@@ -284,8 +386,8 @@ namespace UnityGameServer
             else if (updateMode == UpdateMode.EmptyToReduced || updateMode == UpdateMode.EmptyToFull ||
                      updateMode == UpdateMode.HeightmapToReduced || updateMode == UpdateMode.HeightmapToFull)
             {
-                Min = int.MaxValue;
-                Max = int.MinValue;
+                //Min = int.MaxValue;
+                //Max = int.MinValue;
                 switch (updateMode)
                 {
                     case UpdateMode.EmptyToReduced:
@@ -312,21 +414,15 @@ namespace UnityGameServer
             //if (LoadedFromDisk && !ReduceDepth && Max_Mode == LOD_Mode.Full)
             //    Y_Max = VoxelConversions.GlobalToLocalChunkCoord(VoxelConversions.WorldToVoxel(new Vector3(0, (float)Sampler.GetMin() - Depth, 0))).y;
 
+            UnityGameServer.Logger.Log("Column: Y_Min: {0}, Y_Max: {1}", Y_Min, Y_Max);
 
-            for (globalLocY = yStart, y = Y_Min; y < Y_Max; globalLocY++, y++)
+            col_data.Allocate(ChunkSizeX, ChunkSizeY, ChunkSizeZ);
+            builder.Generate(Y_Min, Y_Max, xStart, zStart);
+
+
+            /*for (globalLocY = yStart, y = Y_Min; y < Y_Max; globalLocY++, y++)
             {
-                /*if (globalLocY > Sampler.GetMax())
-                {
-                    //Logger.Log("broke at " + y);
-                    break;
-                }
-                if (!LoadedFromDisk && !ReduceDepth && Max_Mode == LOD_Mode.Full)
-                    Max = y;
 
-                if ((ReduceDepth && globalLocY < Sampler.GetMin() - Depth))
-                {
-                    continue;
-                }*/
                 Max = Mathf.Max(y, Max);
                 Min = Mathf.Min(y, Min);
 
@@ -349,123 +445,11 @@ namespace UnityGameServer
                         GeneratedBlocks++;
                     }
                 }
-            }
+            }*/
 
             watch.Stop();
             Logger.Log("Generated from {0} to {1}: " + DebugTimer.Elapsed(), Y_Min, Y_Max);
-        }
-
-        public void ProcessBlock(GridPoint[] grid, float isoLevel)
-        {
-            int cubeIndex = 0;
-            if (grid[0].iso > isoLevel) cubeIndex |= 1;
-            if (grid[1].iso > isoLevel) cubeIndex |= 2;
-            if (grid[2].iso > isoLevel) cubeIndex |= 4;
-            if (grid[3].iso > isoLevel) cubeIndex |= 8;
-            if (grid[4].iso > isoLevel) cubeIndex |= 16;
-            if (grid[5].iso > isoLevel) cubeIndex |= 32;
-            if (grid[6].iso > isoLevel) cubeIndex |= 64;
-            if (grid[7].iso > isoLevel) cubeIndex |= 128;
-
-            if (edgeTable[cubeIndex] == 0)
-                return;
-
-            if ((edgeTable[cubeIndex] & 1) != 0)
-                MarkSurfaceBlocks(grid[0], grid[1]);
-            if ((edgeTable[cubeIndex] & 2) != 0)
-                MarkSurfaceBlocks(grid[1], grid[2]);
-            if ((edgeTable[cubeIndex] & 4) != 0)
-                MarkSurfaceBlocks(grid[2], grid[3]);
-            if ((edgeTable[cubeIndex] & 8) != 0)
-                MarkSurfaceBlocks(grid[3], grid[0]);
-
-            if ((edgeTable[cubeIndex] & 16) != 0)
-                MarkSurfaceBlocks(grid[4], grid[5]);
-            if ((edgeTable[cubeIndex] & 32) != 0)
-                MarkSurfaceBlocks(grid[5], grid[6]);
-            if ((edgeTable[cubeIndex] & 64) != 0)
-                MarkSurfaceBlocks(grid[6], grid[7]);
-            if ((edgeTable[cubeIndex] & 128) != 0)
-                MarkSurfaceBlocks(grid[7], grid[4]);
-
-            if ((edgeTable[cubeIndex] & 256) != 0)
-                MarkSurfaceBlocks(grid[0], grid[4]);
-            if ((edgeTable[cubeIndex] & 512) != 0)
-                MarkSurfaceBlocks(grid[1], grid[5]);
-            if ((edgeTable[cubeIndex] & 1024) != 0)
-                MarkSurfaceBlocks(grid[2], grid[6]);
-            if ((edgeTable[cubeIndex] & 2048) != 0)
-                MarkSurfaceBlocks(grid[3], grid[7]);
-        }
-
-        public GridPoint GetGridPoint(Vector3 world, Vector3Int local, Vector3Int global)
-        {
-            GridPoint result = default(GridPoint);
-            uint type;
-
-            if (IsInBounds(local.x, local.y, local.z))
-            {
-                result = new GridPoint(world.x, world.y, world.z, (float)GetIsoValue(local, global, true, out type), type);
-            }
-            else
-            {
-                result = new GridPoint(world.x, world.y, world.z, (float)Sampler.GetIsoValue(local, global, out type), type);
-            }
-
-            result.OriginLocal = local;
-            result.OriginGlobal = global;
-
-            return result;
-        }
-
-        public double GetIsoValue(Vector3Int LocalPosition, Vector3Int globalLocation, bool generate, out uint type)
-        {
-            if (generate && !IsBlockSet(LocalPosition.x, LocalPosition.y, LocalPosition.z))
-            {
-                float generatedValue = (float)GetIsoValue(LocalPosition.x, LocalPosition.y, LocalPosition.z, globalLocation.x, globalLocation.y, globalLocation.z, out type);
-                SetBlock(LocalPosition.x, LocalPosition.y, LocalPosition.z, new Block((byte)type, generatedValue));
-                MarkAsSet(LocalPosition.x, LocalPosition.y, LocalPosition.z);
-            }
-            Block res = GetBlock(LocalPosition.x, LocalPosition.y, LocalPosition.z);
-            type = res.type;
-            return res.iso;
-        }
-
-        public double GetIsoValue(int LocalPositionX, int LocalPositionY, int LocalPositionZ, int globalX, int globalY, int globalZ, out uint type)
-        {
-            return Sampler.GetIsoValue(new Vector3Int(LocalPositionX, LocalPositionY, LocalPositionZ), new Vector3Int(globalX, globalY, globalZ), out type);
-        }
-
-        public void MarkSurfaceBlocks(GridPoint p1, GridPoint p2)
-        {
-            byte[] loc_bytes;
-
-            ushort loc_p1 = (ushort)Get_Flat_Index(p1.OriginLocal.x, p1.OriginLocal.y, p1.OriginLocal.z);
-            if (IsInBounds(p1.OriginLocal.x, p1.OriginLocal.y, p1.OriginLocal.z) && !blocks_surface[loc_p1])
-            {
-                //Vector3 org = 
-                Vector3 other = new Vector3(p2.x, p2.y, p2.z);
-                UnityEngine.Debug.DrawLine(new Vector3(p1.x, p1.y, p1.z), other, UnityEngine.Color.red, 50000);
-                byte type_P1 = (byte)p1.type;
-                byte iso_p1 = (byte)VoxelConversions.Scale(Mathf.Clamp(p1.iso, -2, 2), -2, 2, byte.MinValue, byte.MaxValue);
-                loc_bytes = BitConverter.GetBytes(loc_p1);
-                surfaceBlocks[surfaceBlocksCount] = (BitConverter.ToInt32(new byte[] { loc_bytes[0], loc_bytes[1], type_P1, iso_p1 }, 0));
-                blocks_surface[loc_p1] = true;
-                surfaceBlocksCount++;
-            }
-
-            ushort loc_p2 = (ushort)Get_Flat_Index(p2.OriginLocal.x, p2.OriginLocal.y, p2.OriginLocal.z);
-            if (IsInBounds(p2.OriginLocal.x, p2.OriginLocal.y, p2.OriginLocal.z) && !blocks_surface[loc_p2])
-            {
-                Vector3 other = new Vector3(p1.x, p1.y, p1.z);
-                UnityEngine.Debug.DrawLine(new Vector3(p2.x, p2.y, p2.z), other, UnityEngine.Color.red, 50000);
-                byte type_P2 = (byte)p2.type;
-                byte iso_p2 = (byte)VoxelConversions.Scale(Mathf.Clamp(p2.iso, -2, 2), -2, 2, byte.MinValue, byte.MaxValue);
-                loc_bytes = BitConverter.GetBytes(loc_p2);
-                surfaceBlocks[surfaceBlocksCount] = (BitConverter.ToInt32(new byte[] { loc_bytes[0], loc_bytes[1], type_P2, iso_p2 }, 0));
-                blocks_surface[loc_p2] = true;
-                surfaceBlocksCount++;
-            }
+            Logger.Log("Generated surface blocks: {0}", col_data.surfaceBlocksCount);
         }
 
         public void MarkAsSet(int x, int y, int z)
@@ -539,6 +523,7 @@ namespace UnityGameServer
 
         public void Serialize()
         {
+            return;
             FileStream stream = new FileStream(ColumnFile, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Write);
             BinaryWriter writer = new BinaryWriter(stream, System.Text.Encoding.Default, false);
 
@@ -561,7 +546,7 @@ namespace UnityGameServer
             writer.Write(buff);
 
             int start = Get_Flat_Index(0, Math.Max(Min - 1, 0), 0);
-            int length = ((Max + 1) - (Min - 1)) * 20 * 20;
+            int length = ((Max + 1) - (Min - 1)) * ChunkSizeX * ChunkSizeZ;
 
             // Save all block types
             writer.Write(blocks_type, start, length);
@@ -608,6 +593,8 @@ namespace UnityGameServer
                 return LOD_Mode.Heightmap;
             }
 
+            col_data.Allocate(ChunkSizeX, ChunkSizeY, ChunkSizeZ);
+
             // Load surface blocks
             surfaceBlocksCount = reader.ReadInt32();
             buff = new byte[surfaceBlocksCount * 4];
@@ -617,7 +604,7 @@ namespace UnityGameServer
 
             Logger.Log("Deserializing from {0} to {1}.", Min, Max);
             int start = Get_Flat_Index(0, Math.Max(Min - 1, 0), 0);
-            int length = ((Max + 1) - (Min - 1)) * 20 * 20;
+            int length = ((Max + 1) - (Min - 1)) * ChunkSizeX * ChunkSizeZ;
 
             // Load all block types
             reader.Read(blocks_type, start, length);
@@ -675,20 +662,11 @@ namespace UnityGameServer
             new Vector3Int(1, 1, 0) * skipDist,
             new Vector3Int(0, 1, 0) * skipDist,
             };
-            AllocateBlockArray(ChunkSizeX, ChunkSizeY, ChunkSizeZ);
+            //AllocateBlockArray(ChunkSizeX, ChunkSizeY, ChunkSizeZ);
             Initialized = true;
         }
 
-        private void AllocateBlockArray(int sizeX, int sizeY, int sizeZ)
-        {
-            //blocks = new Block[sizeX * sizeY * sizeZ];
-            blocks_iso = new float[sizeX * sizeY * sizeZ];
-            blocks_type = new byte[sizeX * sizeY * sizeZ];
-            blocks_set = new bool[sizeX * sizeY * sizeZ];
-            blocks_surface = new bool[sizeX * sizeY * sizeZ];
-            SurfaceData = new float[(sizeX + 2) * (sizeZ + 2)];
-            surfaceBlocks = new int[sizeX * sizeY * sizeZ];
-        }
+
 
         
     }

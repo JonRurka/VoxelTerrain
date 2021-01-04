@@ -101,12 +101,12 @@ namespace UnityGameServer
             Columns = new ConcurrentDictionary<Vector3Int, QueueEntry>();
         }
 
-        public void Start()
+        public void Start(bool run_main = false)
         {
             Run = true;
             for (int i = 0; i < NumThreads; i++)
             {
-                SpawnThread(i);
+                SpawnThread(i, run_main);
             }
         }
 
@@ -138,22 +138,35 @@ namespace UnityGameServer
                 TaskQueue.Close("Gen_" + i);
         }
 
-        private void SpawnThread(int num)
+        private void SpawnThread(int num, bool run_main = false)
         {
             TaskQueue.QeueAsync("Gen_" + num, () =>
             {
 
                 while (Run)
                 {
-                    Vector3Int loc;
-                    if (genQueue.TryDequeue(out loc))
+                    Action ac = () => { 
+
+                        Vector3Int loc;
+                        if (genQueue.TryDequeue(out loc))
+                        {
+                            Columns[loc].Process();
+
+                            QueueEntry ent;
+                            Columns.TryRemove(loc, out ent);
+                        }
+
+                    };
+
+                    if (run_main)
                     {
-                        Columns[loc].Process();
-
-                        QueueEntry ent;
-                        Columns.TryRemove(loc, out ent);
+                        Loom.QueueOnMainThread(ac);
                     }
-
+                    else
+                    {
+                        ac();
+                    }
+                    
                     System.Threading.Thread.Sleep(1);
                 }
             });

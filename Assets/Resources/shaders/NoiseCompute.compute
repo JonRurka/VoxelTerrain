@@ -1,0 +1,27 @@
+﻿#include "libnoise.cginc"
+#include "libnoise.module.cginc"
+#include "libnoise.model.cginc"
+
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+
+
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWStructuredBuffer<float> Result;
+
+int seed;
+int quality;
+
+[numthreads(1,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+   Module p_mod = GetModule(1.25/*id.x / 100*/, 0.75, 0.50);
+   //p_mod.m_seed = seed;
+   //p_mod.m_noiseQuality = quality;
+   float res = Perlin_GetValue(p_mod).Value;
+
+   Result[id.x] = res;
+}

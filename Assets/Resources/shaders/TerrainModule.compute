@@ -1,0 +1,206 @@
+﻿#include "libnoise.cginc"
+#include "libnoise.module.cginc"
+#include "libnoise.model.cginc"
+
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CS_Heightmap
+#pragma kernel CS_ISO_Type_Map
+
+struct Result {
+   float iso;
+   uint type;
+};
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWStructuredBuffer<float> HeightMap;
+RWStructuredBuffer<float> ISO_Map;
+RWStructuredBuffer<uint> Type_Map;
+RWStructuredBuffer<Result> ISO_Type_Map;
+
+int ChunkSizeX;
+int ChunkSizeY;
+int ChunkSizeZ;
+
+float VoxelsPerMeter;
+int quality;
+int seed;
+bool enableCaves;
+float amp;
+float caveDensity;
+float grassOffset;
+
+float noiseX;
+float noiseZ;
+
+int Y_Min; 
+int Y_Max; 
+int xStart;
+int zStart;
+int y_height;
+
+
+float TerrainSample(float x, float y, float z)
+{
+   Module perlin_mountains = GetModule(x, y, z);
+   perlin_mountains.m_seed = 0;//seed;
+   perlin_mountains.m_frequency = 0.5;
+   perlin_mountains.m_noiseQuality = QUALITY_BEST;
+
+   Module mountains = GetModule(x, y, z);
+   mountains.m_seed = seed;
+   mountains.m_frequency = 0.5;
+   mountains.m_lacunarity = 2;
+   mountains.m_noiseQuality = QUALITY_BEST;
+
+   //perlin_mountains = ScalePoint_GetModule(perlin_mountains, float3(2, 1, 2));
+   //mountains = ScalePoint_GetModule(mountains, float3(2, 1, 2));
+
+
+   perlin_mountains = Perlin_GetValue(perlin_mountains);
+   //mountains = RidgedMulti_GetValue(mountains);
+
+
+   //perlin_mountains = ScaleBias_GetValue(perlin_mountains, 1, 0);
+   //mountains = ScaleBias_GetValue(mountains, 0.5, 0);
+
+   float blendMountains = perlin_mountains.Value;// +mountains.Value;
+
+   return perlin_mountains.Value; // (blendMountains * 250 + 280) / 3.5;
+}
+
+
+float Angle(float3 from, float3 to)
+{
+   return acos(clamp(dot(normalize(from), normalize(to)), -1.0, 1.0)) * 57.29578;
+}
+
+int Get_Flat_Index(int x, int y, int z)
+{
+   return x + ChunkSizeX * (y + y_height * z);
+}
+
+int Get_Flat_Index_2D(int x, int y)
+{
+   return x * (ChunkSizeZ + 2) + y;
+}
+
+float GetSurfaceHeight(int LocalX, int LocalZ)
+{
+   //LocalX = clamp(LocalX, -1, ChunkSizeX);
+   //LocalZ = clamp(LocalZ, -1, ChunkSizeZ);
+
+   return HeightMap[(LocalX + 1) * (ChunkSizeZ + 2) + (LocalZ + 1)];
+}
+
+float3 GetPointNormal(int x, int z)
+{
+   float val = (float)GetSurfaceHeight(x, z);
+
+   float nx = (val - (float)GetSurfaceHeight(x + 1, z)) - (val - (float)GetSurfaceHeight(x - 1, z));
+   float ny = (val - (float)GetSurfaceHeight(x, z) + 1) - (val - (float)GetSurfaceHeight(x, z) - 1);
+   float nz = (val - (float)GetSurfaceHeight(x, z + 1)) - (val - (float)GetSurfaceHeight(x, z - 1));
+
+   return normalize(float3(nx, ny, nz));
+}
+
+float GetHeight(int x, int y)
+{
+   return TerrainSample((x * (0.003 / VoxelsPerMeter)), 0, (y * (0.003 / VoxelsPerMeter))) *250 * VoxelsPerMeter + 60;
+}
+
+float Noise(float x, float y, float z, float scale, float height, float power)
+{
+   float rValue = 0;
+
+   rValue = TerrainSample(x / scale, y / scale, z / scale);
+   rValue *= height;
+
+   if (power != 0)
+   {
+      rValue = pow(rValue, power);
+   }
+
+   return rValue;
+}
+
+Result GetIsoValue(int3 localPosition, int3 globalLocation)
+{
+   Result res;
+
+   res.iso = -1;
+   res.type = 1;
+
+   float surfaceHeight = GetSurfaceHeight(localPosition.x, localPosition.z);
+   res.iso = surfaceHeight - (globalLocation.y * VoxelsPerMeter);
+   //bool surface = (res.iso > 0);
+
+   if (globalLocation.y < surfaceHeight - 6)
+   {
+      res.type = 3;
+   }
+   else if (globalLocation.y < surfaceHeight - 2)
+   {
+      res.type = 2;
+   }
+
+   if (res.type == 1)
+   {
+      float3 norm = GetPointNormal(localPosition.x, localPosition.z);
+      //if (Vector3.Distance(globalLocation, new Vector3(globalLocation.x, (float)surfaceHeight, globalLocation.z)) < 1)
+      //    Debug.DrawRay(globalLocation, norm, Color.red, 100000);
+
+      if (Angle(float3(0, 1, 0), norm) > 40)
+      {
+         res.type = 2; // dirt
+      }
+
+      if (Angle(float3(0, 1, 0), norm) > 50)
+      {
+         res.type = 3; // rock
+      }
+
+   }
+
+   if (enableCaves)
+   {
+      float noiseVal = Noise(globalLocation.x, globalLocation.y, globalLocation.z, 16.0,
+         17.0, 1.0);
+      if (noiseVal > caveDensity)
+      {
+         res.iso = clamp(res.iso, 0, 1) - noiseVal;
+         //surface = false;
+      }
+   }
+
+   return res;
+}
+
+[numthreads(6, 1, 6)]
+void CS_Heightmap(uint3 id : SV_DispatchThreadID)
+{
+   int n_x = noiseX + id.x;
+   int n_z = noiseZ + id.z;
+
+   float val = GetHeight(n_x, n_z);
+
+   HeightMap[Get_Flat_Index_2D(id.x, id.z)] = val;
+}
+
+[numthreads(8, 1, 8)]
+void CS_ISO_Type_Map(uint3 id : SV_DispatchThreadID)
+{
+   int globalLocX = xStart + id.x;
+   int globalLocZ = zStart + id.z;
+
+   int globalLocY = Y_Min + id.y;
+
+   Result res = GetIsoValue(int3(id.x, globalLocY, id.z), int3(globalLocX, globalLocY, globalLocZ));
+
+   int index = Get_Flat_Index(id.x, id.y, id.z);
+
+   ISO_Type_Map[index] = res;
+   //ISO_Map[index] = res.iso;
+   //Type_Map[index] = res.type;
+}
+

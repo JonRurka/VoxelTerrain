@@ -59,7 +59,7 @@ public class TerrainSampler : ISampler
     public double GetHeight(int x, int y)
     {
         if (NoiseModule != null)
-            return NoiseModule.GetValue((x * (.003 / VoxelsPerMeter)), 0, (y * (.003 / VoxelsPerMeter))) * amp * VoxelsPerMeter - 60;
+            return NoiseModule.GetValue((x * (.003 / VoxelsPerMeter)), 0, (y * (.003 / VoxelsPerMeter))) * 250 * VoxelsPerMeter + 60;
         //else
         //    SafeDebug.LogError("NoiseModule null!");
         return 0;
@@ -212,6 +212,9 @@ public class TerrainSampler : ISampler
             }
         }
         SurfaceSet = true;
+
+        UnityGameServer.Logger.Log("SurfaceData[0]: {0}, {1}, {2}", SurfaceData[0], (bottomLeft.x - 1) * (.003 / VoxelsPerMeter), (bottomLeft.y - 1) * (.003 / VoxelsPerMeter));
+
         return SurfaceData;
     }
 
@@ -232,7 +235,7 @@ public class TerrainSampler : ISampler
 
     public double GetMax()
     {
-        return max;
+        return Mathf.Ceil(max);
     }
 
     public void Dispose()

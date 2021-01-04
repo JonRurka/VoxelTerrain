@@ -15,6 +15,8 @@ public class VoxelServer : GameServer<VoxelServer>
     public RegionLoader Regions { get; private set; }
     public ColumnGenerationQueue GenerationQueue { get; set; }
 
+    public bool Gpu_Acceloration { get; set; }
+
     public VoxelServer(string[] args) : base(args)
     {
         
@@ -41,7 +43,7 @@ public class VoxelServer : GameServer<VoxelServer>
         //Debug.Log("Size: " + System.Runtime.InteropServices.Marshal.SizeOf(typeof(SaveStructure)));
 
         GenerationQueue = new ColumnGenerationQueue(1);
-        GenerationQueue.Start();
+        GenerationQueue.Start(Gpu_Acceloration);
 
         Regions = new RegionLoader(Directory.GetCurrentDirectory());
 
@@ -95,14 +97,26 @@ public class VoxelServer : GameServer<VoxelServer>
 
     public ISampler GetSampler()
     {
-        TerrainModule module = new TerrainModule(SmoothVoxelSettings.seed);
-        ISampler result = new TerrainSampler(module,
-                                    SmoothVoxelSettings.seed,
-                                    SmoothVoxelSettings.enableCaves,
-                                    1.5f,
-                                    SmoothVoxelSettings.caveDensity,
-                                    SmoothVoxelSettings.grassOffset);
-        return result;
+        if (Gpu_Acceloration)
+        {
+            ISampler result = new GPU_TerrainSampler(SmoothVoxelSettings.seed,
+                                        SmoothVoxelSettings.enableCaves,
+                                        1.5f,
+                                        SmoothVoxelSettings.caveDensity,
+                                        SmoothVoxelSettings.grassOffset);
+            return result;
+        }
+        else
+        {
+            TerrainModule module = new TerrainModule(SmoothVoxelSettings.seed);
+            ISampler result = new TerrainSampler(module,
+                                        SmoothVoxelSettings.seed,
+                                        SmoothVoxelSettings.enableCaves,
+                                        1.5f,
+                                        SmoothVoxelSettings.caveDensity,
+                                        SmoothVoxelSettings.grassOffset);
+            return result;
+        }
     }
 
     // A test network command. Can be called from both tcp and udp.

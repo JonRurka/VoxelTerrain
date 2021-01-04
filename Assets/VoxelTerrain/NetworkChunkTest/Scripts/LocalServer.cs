@@ -4,6 +4,8 @@ using UnityEngine;
 
 public class LocalServer : MonoBehaviour
 {
+    public bool gpu_acceloration;
+
     VoxelServer server;
 
     public System.Action OnServerInitialized;
@@ -12,7 +14,7 @@ public class LocalServer : MonoBehaviour
     void Awake()
     {
         server = new VoxelServer(new string[0]);
-        
+        server.Gpu_Acceloration = gpu_acceloration;
     }
 
     // Update is called once per frame

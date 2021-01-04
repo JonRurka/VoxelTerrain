@@ -1,0 +1,274 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CS_Generate
+
+#define NUM_GRIDS 6
+#define ISO_LEVEL 0
+
+#define IS_DEBUG
+
+struct Result {
+   float iso;
+   uint type;
+};
+
+struct Debug_Data_Res {
+   float3 p1;
+   float3 p2;
+};
+
+class GridPoint {
+   float x;
+   float y;
+   float z;
+   float iso;
+   uint type;
+   int3 OriginLocal;
+   int3 OriginGlobal;
+   bool isSolid;
+};
+
+GridPoint GetGridPoint(float x, float y, float z)
+{
+   GridPoint p;
+
+   p.x = x;
+   p.y = y;
+   p.z = z;
+   p.iso = 0;
+   p.type = 0;
+   p.OriginLocal = int3(0, 0, 0);
+   p.OriginGlobal = int3(0, 0, 0);
+
+   return p;
+}
+
+GridPoint GetGridPoint(float x, float y, float z, float iso)
+{
+   GridPoint p;
+
+   p.x = x;
+   p.y = y;
+   p.z = z;
+   p.iso = iso;
+   p.type = 0;
+   p.OriginLocal = int3(0,0,0);
+   p.OriginGlobal = int3(0, 0, 0);
+
+   return p;
+}
+
+GridPoint GetGridPoint(float x, float y, float z, float iso, uint type)
+{
+   GridPoint p;
+
+   p.x = x;
+   p.y = y;
+   p.z = z;
+   p.iso = iso;
+   p.type = type;
+   p.OriginLocal = int3(0, 0, 0);
+   p.OriginGlobal = int3(0, 0, 0);
+
+   return p;
+}
+
+GridPoint GetGridPoint(int3 local, int3 global, float iso, uint type)
+{
+   GridPoint p;
+
+   p.x = global.x;
+   p.y = global.y;
+   p.z = global.z;
+   p.iso = iso;
+   p.type = type;
+   p.OriginLocal = local;
+   p.OriginGlobal = global;
+
+   return p;
+}
+
+StructuredBuffer<float> HeightMap;
+StructuredBuffer<Result> ISO_Type_Map;
+AppendStructuredBuffer<uint> Data;
+AppendStructuredBuffer<Debug_Data_Res> Data_DEBUG;
+
+
+int Y_Min;
+int Y_Max;
+int xStart;
+int zStart;
+int y_height;
+
+float VoxelsPerMeter;
+int ChunkMeterSizeX;
+int ChunkMeterSizeY;
+int ChunkMeterSizeZ;
+int ChunkSizeX;
+int ChunkSizeY;
+int ChunkSizeZ;
+int skipDist;
+float half_;
+float xSideLength;
+float ySideLength;
+float zSideLength;
+
+static int3 directionOffsets[] =
+{
+   int3(0, 1, 0),
+   int3(0, -1, 0),
+   int3(1, 0, 0),
+   int3(-1, 0, 0),
+   int3(0, 0, 1),
+   int3(0, 0, -1)
+};
+
+int Get_Flat_Index(int x, int y, int z)
+{
+   return x + ChunkSizeX * (y + y_height * z);
+}
+
+int Get_Flat_Index_2D(int x, int y)
+{
+   return x * (ChunkSizeZ + 2) + y;
+}
+
+bool IsInBounds(int x, int y, int z)
+{
+   return ((x < ChunkSizeX) && x >= 0) && ((y < ChunkSizeY) && y >= 0) && ((z < ChunkSizeZ) && z >= 0);
+}
+
+float Scale(float value, float oldMin, float oldMax, float newMin, float newMax)
+{
+   return newMin + (value - oldMin) * (newMax - newMin) / (oldMax - oldMin);
+}
+
+void MarkSurfaceBlocks(GridPoint p1, GridPoint p2) {
+   
+   uint loc = Get_Flat_Index(p1.OriginLocal.x, p1.OriginLocal.y, p1.OriginLocal.z);
+   uint type_P2 = p1.type << 16;
+   uint iso_p2 = (uint)Scale(clamp(2, -2, 2), -2, 2, 0, 255) << 24;
+
+   uint val = 0;
+   val = loc;
+   val |= type_P2;
+   val |= iso_p2;
+
+   Data.Append(val);
+
+#ifdef IS_DEBUG
+   Debug_Data_Res d_res;
+   d_res.p1 = float3(p1.x, p1.y, p1.z);
+   d_res.p2 = float3(p2.x, p2.y, p2.z);
+
+   Data_DEBUG.Append(d_res);
+#endif
+}
+
+GridPoint GetGridPoint(float3 world, int3 local, int3 global)
+{
+   GridPoint result;
+   uint type;
+
+   if (IsInBounds(local.x, local.y, local.z))
+   {
+      Result iso_type = ISO_Type_Map[Get_Flat_Index(local.x, local.y, local.z)];
+      result = GetGridPoint(world.x, world.y, world.z, iso_type.iso, iso_type.type);
+
+   }
+   else
+   {
+      type = 255;
+      result = GetGridPoint(world.x, world.y, world.z, -1, type);
+      //result = new GridPoint(world.x, world.y, world.z, (float)Sampler.GetIsoValue(local, global, out type), type);
+   }
+
+   result.OriginLocal = local;
+   result.OriginGlobal = global;
+   //UnityGameServer.Logger.Log(result.iso);
+   return result;
+}
+
+bool ProcessBlock(GridPoint this_point, bool isSolid, GridPoint grid, float isoLevel) {
+   bool otherSolid = grid.iso > isoLevel;;
+
+   if (grid.type == 255)
+      return false;
+
+   if (isSolid != otherSolid) {
+      MarkSurfaceBlocks(this_point, grid);
+      return true;
+   }
+
+   return false;
+}
+
+[numthreads(6, 1, 6)]
+void CS_Generate(uint3 id : SV_DispatchThreadID)
+{
+   int x = id.x;
+   int z = id.z;
+   int y = Y_Min + id.y;
+
+   int globalLocY = y;
+   int globalLocZ = zStart + z;
+   int globalLocX = xStart + x;
+
+   /*if (globalLocY > HeightMap[Get_Flat_Index_2D(x, z)] + 2) {
+      return;
+   }*/
+
+   float3 locOffset[] =
+   {
+      int3(0, zSideLength, 0),
+      int3(0, -zSideLength, 0),
+      int3(zSideLength, 0, 0),
+      int3(-zSideLength, 0, 0),
+      int3(0, 0, zSideLength),
+      int3(0, 0, -zSideLength)
+   };
+   int3 globalOffsets[] = 
+   {
+       directionOffsets[0] * skipDist,
+       directionOffsets[1] * skipDist,
+       directionOffsets[2] * skipDist,
+       directionOffsets[3] * skipDist,
+       directionOffsets[4] * skipDist,
+       directionOffsets[5] * skipDist,
+   };
+   
+   float3 worldPos = float3(x * xSideLength, y * ySideLength, z * zSideLength);
+   int3 globalPos = int3(globalLocX * skipDist, globalLocY * skipDist, globalLocZ * skipDist);
+   int3 localPos = int3(x, y, z);
+
+
+   GridPoint this_point = GetGridPoint(worldPos, localPos, globalPos);
+   bool isSolid = this_point.iso > ISO_LEVEL;
+
+   bool processNext = true;
+   GridPoint grid;
+   for (uint i = 0; i < NUM_GRIDS && processNext; i++)
+   {
+      grid = GetGridPoint(worldPos + locOffset[i], localPos + directionOffsets[i], globalPos + globalOffsets[i]);
+      processNext = !ProcessBlock(this_point, isSolid, grid, ISO_LEVEL);
+   }
+}
+
+
+/*[numthreads(16,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+   Result result;
+
+   result.iso = 0;
+   result.type = id.x;
+
+   if (id.x < 18688 | 1715) {
+      Data.Append(result);
+   }
+
+   Raw[id.x] = result;
+
+   Min_Max[0] = float2(0, 100);
+
+   //Count[0] = 1715;
+}*/

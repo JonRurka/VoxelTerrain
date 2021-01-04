@@ -52,9 +52,9 @@ public static class SmoothVoxelSettings {
     public const float grassOffset = 4;
 
     public const double voxelsPerMeter = 1f;
-    public const int MeterSizeX = 20;
+    public const int MeterSizeX = 16;
     public const int MeterSizeY = 256;
-    public const int MeterSizeZ = 20;
+    public const int MeterSizeZ = 16;
     public const int ChunkSizeX = (int)(MeterSizeX * voxelsPerMeter);
     public const int ChunkSizeY = (int)(MeterSizeY * voxelsPerMeter);
     public const int ChunkSizeZ = (int)(MeterSizeZ * voxelsPerMeter);
